@@ -243,22 +243,21 @@
         - firewalld_status.stdout is defined
         - firewalld_status.stdout == 'running'
 
-    - name: Ensure python3 is available for the seeder
-      ansible.builtin.apt:
-        name:
-          - python3
-        state: present
-
+    # python3 for the seeder is guaranteed by the "Ensure Python is installed
+    # for Ansible modules" pre_task.
     - name: Template Electric Forest automation seeder
       ansible.builtin.template:
         src: templates/seed-meshmonitor-settings.sh.j2
         dest: "{{ meshmonitor_compose_dir }}/seed-settings.sh"
         mode: "0700"
-      no_log: true
 
     - name: Seed Electric Forest turnkey automations
       ansible.builtin.command:
         cmd: "{{ meshmonitor_compose_dir }}/seed-settings.sh"
+      environment:
+        # Passed via environment (not templated into the script) so the
+        # password never lands on disk and is never shell-interpreted.
+        EF_SEED_ADMIN_PASSWORD: "{{ meshmonitor_admin_password }}"
       register: ef_seed_result
       changed_when: "'Seed complete' in ef_seed_result.stdout"
       failed_when: ef_seed_result.rc != 0

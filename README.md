@@ -114,7 +114,7 @@ chmod +x scripts/run.sh
 After deployment:
 
 - Nginx listens on Pi port 80
-- Nginx proxies to MeshMonitor container port `MESHMONITOR_HTTP_PORT`
+- Nginx proxies to `127.0.0.1:<MESHMONITOR_HTTP_PORT>`, the Pi host port Docker publishes (the container itself listens on 3001)
 - MeshMonitor container is configured for the selected radio mode (`wifi` or `bluetooth`) via container environment
 - Wifi mode configures MeshMonitor with the provided `RADIO_IP`
 - Bluetooth mode deploys `meshtastic-ble-bridge` with the provided `RADIO_MAC`

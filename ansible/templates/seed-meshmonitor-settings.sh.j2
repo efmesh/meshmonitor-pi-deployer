@@ -13,7 +13,10 @@
 set -euo pipefail
 
 BASE_URL="http://127.0.0.1:{{ meshmonitor_http_port }}"
-ADMIN_PASSWORD={{ meshmonitor_admin_password | to_json }}
+# The admin password is passed via the environment by the Ansible task rather
+# than templated into this file, so it never lands on disk and shell
+# metacharacters ($, backticks, quotes) in it are never interpreted.
+ADMIN_PASSWORD="${EF_SEED_ADMIN_PASSWORD:?EF_SEED_ADMIN_PASSWORD must be set in the environment}"
 SEED_VERSION="{{ efmesh_seed_version }}"
 FORCE_SEED="{{ ef_force_seed | lower }}"
 MARKER_FILE="{{ meshmonitor_seed_marker_file }}"
@@ -36,14 +39,14 @@ fi
 # --- Wait for MeshMonitor HTTP -----------------------------------------------
 log "Waiting for MeshMonitor to come up at $BASE_URL ..."
 UP=false
-for _ in $(seq 1 60); do
+for _ in $(seq 1 150); do
   if curl -fsS "$BASE_URL/api/csrf-token" >/dev/null 2>&1; then
     UP=true
     break
   fi
   sleep 2
 done
-[ "$UP" = "true" ] || fail "MeshMonitor did not become reachable within ~120s"
+[ "$UP" = "true" ] || fail "MeshMonitor did not become reachable within ~300s"
 log "MeshMonitor is up."
 
 # --- Helpers -----------------------------------------------------------------
@@ -61,7 +64,7 @@ login() {
     -X POST "$BASE_URL/api/auth/login" \
     -H 'Content-Type: application/json' \
     -H "X-CSRF-Token: $csrf" \
-    --data "$(printf '{"username":"admin","password":%s}' "$(printf '%s' "$pw" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/')")")"
+    --data "$(python3 -c 'import json,sys; print(json.dumps({"username":"admin","password":sys.argv[1]}))' "$pw")")"
   printf '%s' "$code"
 }
 
@@ -125,7 +128,8 @@ VERIFY_FILE="$(mktemp)"
 curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE_URL/api/settings" -o "$VERIFY_FILE" \
   || fail "Could not read back settings for verification"
 
-python3 - "$VERIFY_FILE" "$PAYLOAD_FILE" <<'PYEOF'
+VERIFY_RC=0
+python3 - "$VERIFY_FILE" "$PAYLOAD_FILE" <<'PYEOF' || VERIFY_RC=$?
 import json, sys
 with open(sys.argv[1]) as fh:
     current = json.load(fh)
@@ -154,7 +158,6 @@ if mismatched:
 
 print("[ef-seed] Verified %d key(s) present and matching." % len(required))
 PYEOF
-VERIFY_RC=$?
 rm -f "$VERIFY_FILE"
 [ "$VERIFY_RC" -eq 0 ] || fail "Verification failed"
 

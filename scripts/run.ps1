@@ -135,7 +135,7 @@ while ($true) {
 }
 
 # Sunrise morning message (optional; default substitutes the camp).
-$EfMorningDefault = if ($env:EF_MORNING_MESSAGE) { $env:EF_MORNING_MESSAGE } else { "$([char]0x1F305) Good Morning from $EfCamp! $([char]0x2600)$([char]0xFE0F)$([char]0x1F332)" }
+$EfMorningDefault = if ($env:EF_MORNING_MESSAGE) { $env:EF_MORNING_MESSAGE } else { "$([char]::ConvertFromUtf32(0x1F305)) Good Morning from $EfCamp! $([char]0x2600)$([char]0xFE0F)$([char]::ConvertFromUtf32(0x1F332))" }
 $EfMorningInput = Read-Host "Sunrise morning message [$EfMorningDefault]"
 $EfMorningMessage = if ([string]::IsNullOrWhiteSpace($EfMorningInput)) { $EfMorningDefault } else { $EfMorningInput }
 

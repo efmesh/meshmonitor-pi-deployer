@@ -103,7 +103,7 @@ Two services are deployed:
 
 ## 4. Network exposure model
 
-- MeshMonitor container port 80 is published to Pi host port `MESHMONITOR_HTTP_PORT` (default `8080`).
+- MeshMonitor container port 3001 is published to Pi host port `MESHMONITOR_HTTP_PORT` (default `8080`).
 - Nginx listens on host port 80 and reverse proxies to `127.0.0.1:<MESHMONITOR_HTTP_PORT>`.
 - Users access the UI at `http://<PI_IP>/`.
 

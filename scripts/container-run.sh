@@ -74,9 +74,12 @@ if [ "$RADIO_CONNECTION_TYPE" = "bluetooth" ]; then
   fi
 fi
 
+# Single-quote the password for the INI host line so spaces survive Ansible's
+# shlex parsing, escaping any single quotes the password itself contains.
+PI_PASSWORD_INI="$(printf '%s' "$PI_PASSWORD" | sed "s/'/'\\\\''/g")"
 cat > /workspace/ansible/inventory.ini <<EOF
 [raspberry_pi]
-pi_target ansible_host=$PI_IP ansible_user=$PI_USERNAME ansible_port=$PI_SSH_PORT ansible_connection=ssh ansible_ssh_pass=$PI_PASSWORD ansible_become_pass=$PI_PASSWORD
+pi_target ansible_host=$PI_IP ansible_user=$PI_USERNAME ansible_port=$PI_SSH_PORT ansible_connection=ssh ansible_ssh_pass='$PI_PASSWORD_INI' ansible_become_pass='$PI_PASSWORD_INI'
 EOF
 
 echo "Running deployment for $PI_IP with MeshMonitor radio mode: $RADIO_CONNECTION_TYPE"
