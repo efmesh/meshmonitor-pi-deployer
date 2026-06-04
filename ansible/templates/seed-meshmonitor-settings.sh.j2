@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Electric Forest turnkey MeshMonitor automation seeder.
+#
+# Rendered by Ansible from seed-meshmonitor-settings.sh.j2. Logs into a fresh
+# MeshMonitor instance, sets the admin password, and seeds a turnkey set of
+# Electric Forest automations (auto-ack, auto-ping, auto-responder, auto-welcome,
+# and a sunrise announce). Idempotent: records the applied seed version in a
+# marker file and exits early on reruns unless FORCE_SEED is set.
+#
+# MeshMonitor's /api/settings endpoint only persists recognized setting keys
+# (unknown keys are silently dropped), so the seed version is tracked on the Pi
+# via {{ meshmonitor_seed_marker_file }} rather than as a setting.
+set -euo pipefail
+
+BASE_URL="http://127.0.0.1:{{ meshmonitor_http_port }}"
+ADMIN_PASSWORD={{ meshmonitor_admin_password | to_json }}
+SEED_VERSION="{{ efmesh_seed_version }}"
+FORCE_SEED="{{ ef_force_seed | lower }}"
+MARKER_FILE="{{ meshmonitor_seed_marker_file }}"
+
+COOKIE_JAR="$(mktemp)"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+
+log() { printf '[ef-seed] %s\n' "$*"; }
+fail() { printf '[ef-seed][ERROR] %s\n' "$*" >&2; exit 1; }
+
+# --- Idempotency -------------------------------------------------------------
+if [ "$FORCE_SEED" != "true" ] && [ -f "$MARKER_FILE" ]; then
+  CURRENT="$(cat "$MARKER_FILE" 2>/dev/null || echo 0)"
+  if [ "${CURRENT:-0}" -ge "$SEED_VERSION" ] 2>/dev/null; then
+    log "Already seeded at version $CURRENT (>= $SEED_VERSION); nothing to do."
+    exit 0
+  fi
+fi
+
+# --- Wait for MeshMonitor HTTP -----------------------------------------------
+log "Waiting for MeshMonitor to come up at $BASE_URL ..."
+UP=false
+for _ in $(seq 1 60); do
+  if curl -fsS "$BASE_URL/api/csrf-token" >/dev/null 2>&1; then
+    UP=true
+    break
+  fi
+  sleep 2
+done
+[ "$UP" = "true" ] || fail "MeshMonitor did not become reachable within ~120s"
+log "MeshMonitor is up."
+
+# --- Helpers -----------------------------------------------------------------
+get_csrf() {
+  curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE_URL/api/csrf-token" \
+    | sed 's/.*"csrfToken":"//; s/".*//'
+}
+
+# login <password> -> echoes HTTP status code
+login() {
+  local pw="$1" csrf code
+  csrf="$(get_csrf)"
+  code="$(curl -s -o /dev/null -w '%{http_code}' \
+    -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+    -X POST "$BASE_URL/api/auth/login" \
+    -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $csrf" \
+    --data "$(printf '{"username":"admin","password":%s}' "$(printf '%s' "$pw" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/')")")"
+  printf '%s' "$code"
+}
+
+# --- Authenticate ------------------------------------------------------------
+# Prefer the configured admin password (rerun / already-changed case); on 401
+# fall back to the MeshMonitor default and change it.
+log "Authenticating ..."
+CODE="$(login "$ADMIN_PASSWORD")"
+if [ "$CODE" = "200" ]; then
+  log "Logged in with configured admin password."
+elif [ "$CODE" = "401" ]; then
+  log "Configured password rejected; trying default admin/changeme ..."
+  CODE="$(login "changeme")"
+  [ "$CODE" = "200" ] || fail "Login failed with both configured password and default (HTTP $CODE)"
+  log "Logged in with default credentials; changing admin password ..."
+  CSRF="$(get_csrf)"
+  CHCODE="$(curl -s -o /dev/null -w '%{http_code}' \
+    -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+    -X POST "$BASE_URL/api/auth/change-password" \
+    -H 'Content-Type: application/json' \
+    -H "X-CSRF-Token: $CSRF" \
+    --data "$(python3 -c 'import json,sys; print(json.dumps({"currentPassword":"changeme","newPassword":sys.argv[1]}))' "$ADMIN_PASSWORD")")"
+  [ "$CHCODE" = "200" ] || fail "Password change failed (HTTP $CHCODE)"
+  log "Password changed. Re-authenticating with new password ..."
+  CODE="$(login "$ADMIN_PASSWORD")"
+  [ "$CODE" = "200" ] || fail "Re-login after password change failed (HTTP $CODE)"
+else
+  fail "Unexpected login response (HTTP $CODE)"
+fi
+
+# --- Seed settings -----------------------------------------------------------
+# All values are flat strings. Camp and morning message are substituted via
+# Jinja2 with the to_json filter so quotes / emoji are escaped safely.
+log "Seeding Electric Forest automation settings ..."
+PAYLOAD_FILE="$(mktemp)"
+trap 'rm -f "$COOKIE_JAR" "$PAYLOAD_FILE"' EXIT
+cat > "$PAYLOAD_FILE" <<'PAYLOAD'
+{{ ef_seed_settings | to_nice_json(indent=2) }}
+PAYLOAD
+
+CSRF="$(get_csrf)"
+RESP_FILE="$(mktemp)"
+HTTP="$(curl -s -o "$RESP_FILE" -w '%{http_code}' \
+  -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  -X POST "$BASE_URL/api/settings" \
+  -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $CSRF" \
+  --data @"$PAYLOAD_FILE")"
+if [ "$HTTP" != "200" ]; then
+  log "Settings POST returned HTTP $HTTP; body:"
+  cat "$RESP_FILE" >&2 || true
+  rm -f "$RESP_FILE"
+  fail "Seeding settings failed"
+fi
+rm -f "$RESP_FILE"
+log "Settings POST accepted (HTTP 200)."
+
+# --- Verify ------------------------------------------------------------------
+log "Verifying seeded settings ..."
+VERIFY_FILE="$(mktemp)"
+curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE_URL/api/settings" -o "$VERIFY_FILE" \
+  || fail "Could not read back settings for verification"
+
+python3 - "$VERIFY_FILE" "$PAYLOAD_FILE" <<'PYEOF'
+import json, sys
+with open(sys.argv[1]) as fh:
+    current = json.load(fh)
+with open(sys.argv[2]) as fh:
+    seeded = json.load(fh)
+
+# Spot-check a representative set of keys actually landed.
+required = [
+    "autoAckEnabled", "autoAckChannels", "autoPingEnabled",
+    "autoResponderEnabled", "autoResponderTriggers", "autoWelcomeEnabled",
+    "autoAnnounceEnabled", "autoAnnounceSchedule", "autoAnnounceMessage",
+    "autoAckMessage",
+]
+missing = [k for k in required if k not in current]
+if missing:
+    sys.stderr.write("[ef-seed][ERROR] keys missing after seed: %s\n" % ", ".join(missing))
+    sys.exit(1)
+
+mismatched = []
+for k in required:
+    if str(current.get(k)) != str(seeded.get(k)):
+        mismatched.append(k)
+if mismatched:
+    sys.stderr.write("[ef-seed][ERROR] keys did not match seeded values: %s\n" % ", ".join(mismatched))
+    sys.exit(1)
+
+print("[ef-seed] Verified %d key(s) present and matching." % len(required))
+PYEOF
+VERIFY_RC=$?
+rm -f "$VERIFY_FILE"
+[ "$VERIFY_RC" -eq 0 ] || fail "Verification failed"
+
+# --- Record seed version -----------------------------------------------------
+printf '%s\n' "$SEED_VERSION" > "$MARKER_FILE"
+log "Seed complete. Recorded seed version $SEED_VERSION at $MARKER_FILE."

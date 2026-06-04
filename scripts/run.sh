@@ -52,6 +52,68 @@ if [[ "$RADIO_CONNECTION_TYPE" == "bluetooth" ]]; then
   fi
 fi
 
+# Electric Forest turnkey automations --------------------------------------------
+# Camp picker: pick a known Electric Forest camp/area or type your own. The
+# selection is baked into the seeded auto-ack / sunrise messages at deploy time.
+EF_CAMPS=(
+  "GA Campgrounds"
+  "Good Life Village"
+  "Camp Higher Love"
+  "Maplewoods"
+  "Lucky Lake"
+  "The Back 40"
+)
+EF_CAMP_DEFAULT="${EF_CAMP:-}"
+echo
+echo "Which Electric Forest camp / area is this node at?"
+idx=1
+for camp in "${EF_CAMPS[@]}"; do
+  echo "  $idx) $camp"
+  idx=$((idx + 1))
+done
+echo "  $idx) Other (type your own, e.g. \"GA Loop 5 by the showers\")"
+OTHER_INDEX="$idx"
+
+if [[ -n "$EF_CAMP_DEFAULT" ]]; then
+  read -rp "Camp [$EF_CAMP_DEFAULT]: " EF_CAMP_CHOICE
+else
+  read -rp "Camp (1-$OTHER_INDEX): " EF_CAMP_CHOICE
+fi
+
+if [[ -z "$EF_CAMP_CHOICE" && -n "$EF_CAMP_DEFAULT" ]]; then
+  EF_CAMP="$EF_CAMP_DEFAULT"
+elif [[ "$EF_CAMP_CHOICE" == "$OTHER_INDEX" ]]; then
+  read -rp "Enter your camp / location: " EF_CAMP
+elif [[ "$EF_CAMP_CHOICE" =~ ^[0-9]+$ ]] && (( EF_CAMP_CHOICE >= 1 && EF_CAMP_CHOICE <= ${#EF_CAMPS[@]} )); then
+  EF_CAMP="${EF_CAMPS[$((EF_CAMP_CHOICE - 1))]}"
+else
+  # Treat any free-text entry as a custom camp name.
+  EF_CAMP="$EF_CAMP_CHOICE"
+fi
+
+while [[ -z "${EF_CAMP// /}" ]]; do
+  read -rp "Camp / location cannot be empty. Enter your camp: " EF_CAMP
+done
+echo "Camp set to: $EF_CAMP"
+
+# MeshMonitor admin password (required by the seeder). Silent input.
+EF_MORNING_DEFAULT="${EF_MORNING_MESSAGE:-🌅 Good Morning from ${EF_CAMP}! ☀️🌲}"
+while true; do
+  read -rsp "MeshMonitor admin password to set (required, not 'changeme'): " MESHMONITOR_ADMIN_PASSWORD
+  echo
+  if [[ -z "$MESHMONITOR_ADMIN_PASSWORD" ]]; then
+    echo "Admin password cannot be empty."
+  elif [[ "$MESHMONITOR_ADMIN_PASSWORD" == "changeme" ]]; then
+    echo "Admin password must not be the default 'changeme'."
+  else
+    break
+  fi
+done
+
+# Sunrise morning message (optional; default substitutes the camp).
+read -rp "Sunrise morning message [$EF_MORNING_DEFAULT]: " EF_MORNING_INPUT
+EF_MORNING_MESSAGE="${EF_MORNING_INPUT:-$EF_MORNING_DEFAULT}"
+
 DEPLOYER_IMAGE_NAME="${DEPLOYER_IMAGE_NAME:-meshmonitor-deployer:latest}"
 
 docker build -t "$DEPLOYER_IMAGE_NAME" "$PROJECT_DIR"
@@ -63,6 +125,10 @@ docker run --rm \
   -e RADIO_MAC="$RADIO_MAC_VALUE" \
   -e PI_USERNAME="${PI_USERNAME:-pi}" \
   -e PI_SSH_PORT="${PI_SSH_PORT:-22}" \
+  -e EF_CAMP="$EF_CAMP" \
+  -e EF_MORNING_MESSAGE="$EF_MORNING_MESSAGE" \
+  -e MESHMONITOR_ADMIN_PASSWORD="$MESHMONITOR_ADMIN_PASSWORD" \
+  -e FORCE_SEED="${FORCE_SEED:-false}" \
   -e MESHMONITOR_IMAGE="${MESHMONITOR_IMAGE:-ghcr.io/yeraze/meshmonitor:latest}" \
   -e MESHMONITOR_HTTP_PORT="${MESHMONITOR_HTTP_PORT:-8080}" \
   -e MESHTASTIC_BLE_BRIDGE_IMAGE="${MESHTASTIC_BLE_BRIDGE_IMAGE:-ghcr.io/meshtastic/meshtastic-ble-bridge:latest}" \

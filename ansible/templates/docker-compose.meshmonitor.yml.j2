@@ -20,6 +20,10 @@ services:
     restart: unless-stopped
     environment:
       MESHMONITOR_RADIO_CONNECTION_TYPE: "{{ meshmonitor_radio_connection_type }}"
+      # Container timezone so the sunrise announce cron fires Rothbury-local.
+      TZ: "{{ meshmonitor_timezone }}"
+      # Persisted across deploys (Ansible generates it once if absent).
+      SESSION_SECRET: "{{ meshmonitor_session_secret }}"
 {% if meshmonitor_radio_connection_type == 'bluetooth' %}
       # MeshMonitor bluetooth mode: use meshtastic-ble-bridge on the Docker network.
       MESHMONITOR_RADIO_TRANSPORT: "meshtastic-ble-bridge"
@@ -41,8 +45,12 @@ services:
 {% if meshmonitor_radio_connection_type == 'bluetooth' %}
     depends_on:
       - meshtastic-ble-bridge
+{% endif %}
     volumes:
+      # Persist MeshMonitor database, session store, VAPID keys, and settings.
+      - {{ meshmonitor_data_dir }}:/data
+{% if meshmonitor_radio_connection_type == 'bluetooth' %}
       - /var/run/dbus:/var/run/dbus
 {% endif %}
     ports:
-      - "{{ meshmonitor_http_port }}:80"
+      - "{{ meshmonitor_http_port }}:{{ meshmonitor_container_port }}"

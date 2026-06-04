@@ -49,6 +49,16 @@
         msg: "MeshMonitor wifi mode selected. Radio IP {{ meshmonitor_radio_ip }} will be used."
       when: meshmonitor_radio_connection_type == 'wifi'
 
+    - name: Validate Electric Forest seeding inputs
+      ansible.builtin.assert:
+        that:
+          - ef_camp | length > 0
+          - meshmonitor_admin_password | length > 0
+          - meshmonitor_admin_password != 'changeme'
+        fail_msg: >-
+          EF_CAMP and MESHMONITOR_ADMIN_PASSWORD are required to seed Electric
+          Forest automations, and the admin password must not be 'changeme'.
+
   tasks:
     - name: Install required system packages (might take a few minutes)
       ansible.builtin.apt:
@@ -113,6 +123,34 @@
         path: "{{ meshmonitor_compose_dir }}"
         state: directory
         mode: "0755"
+
+    - name: Ensure meshmonitor data directory exists
+      ansible.builtin.file:
+        path: "{{ meshmonitor_data_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check whether a MeshMonitor session secret already exists
+      ansible.builtin.stat:
+        path: "{{ meshmonitor_session_secret_file }}"
+      register: meshmonitor_session_secret_stat
+
+    - name: Generate MeshMonitor session secret once (persisted across deploys)
+      ansible.builtin.copy:
+        # 64 hex chars of randomness; only written if the file is absent.
+        content: "{{ lookup('password', '/dev/null length=64 chars=hexdigits') }}\n"
+        dest: "{{ meshmonitor_session_secret_file }}"
+        mode: "0600"
+      when: not meshmonitor_session_secret_stat.stat.exists
+
+    - name: Read persisted MeshMonitor session secret
+      ansible.builtin.slurp:
+        src: "{{ meshmonitor_session_secret_file }}"
+      register: meshmonitor_session_secret_slurp
+
+    - name: Set MeshMonitor session secret fact
+      ansible.builtin.set_fact:
+        meshmonitor_session_secret: "{{ (meshmonitor_session_secret_slurp.content | b64decode | trim) }}"
 
     - name: Template docker compose file
       ansible.builtin.template:
@@ -204,3 +242,27 @@
         - firewalld_check.rc == 0
         - firewalld_status.stdout is defined
         - firewalld_status.stdout == 'running'
+
+    - name: Ensure python3 is available for the seeder
+      ansible.builtin.apt:
+        name:
+          - python3
+        state: present
+
+    - name: Template Electric Forest automation seeder
+      ansible.builtin.template:
+        src: templates/seed-meshmonitor-settings.sh.j2
+        dest: "{{ meshmonitor_compose_dir }}/seed-settings.sh"
+        mode: "0700"
+      no_log: true
+
+    - name: Seed Electric Forest turnkey automations
+      ansible.builtin.command:
+        cmd: "{{ meshmonitor_compose_dir }}/seed-settings.sh"
+      register: ef_seed_result
+      changed_when: "'Seed complete' in ef_seed_result.stdout"
+      failed_when: ef_seed_result.rc != 0
+
+    - name: Show Electric Forest seeding result
+      ansible.builtin.debug:
+        msg: "{{ ef_seed_result.stdout_lines }}"

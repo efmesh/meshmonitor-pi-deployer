@@ -79,6 +79,68 @@ if ($RadioConnectionType -eq "bluetooth") {
     }
 }
 
+# Electric Forest turnkey automations --------------------------------------------
+# Camp picker: pick a known Electric Forest camp/area or type your own. The
+# selection is baked into the seeded auto-ack / sunrise messages at deploy time.
+$EfCamps = @(
+    "GA Campgrounds",
+    "Good Life Village",
+    "Camp Higher Love",
+    "Maplewoods",
+    "Lucky Lake",
+    "The Back 40"
+)
+$EfCampDefault = if ($env:EF_CAMP) { $env:EF_CAMP } else { "" }
+Write-Host ""
+Write-Host "Which Electric Forest camp / area is this node at?"
+for ($i = 0; $i -lt $EfCamps.Count; $i++) {
+    Write-Host ("  {0}) {1}" -f ($i + 1), $EfCamps[$i])
+}
+$OtherIndex = $EfCamps.Count + 1
+Write-Host ("  {0}) Other (type your own, e.g. ""GA Loop 5 by the showers"")" -f $OtherIndex)
+
+if (-not [string]::IsNullOrWhiteSpace($EfCampDefault)) {
+    $EfCampChoice = Read-Host "Camp [$EfCampDefault]"
+} else {
+    $EfCampChoice = Read-Host "Camp (1-$OtherIndex)"
+}
+
+if ([string]::IsNullOrWhiteSpace($EfCampChoice) -and -not [string]::IsNullOrWhiteSpace($EfCampDefault)) {
+    $EfCamp = $EfCampDefault
+} elseif ($EfCampChoice -eq "$OtherIndex") {
+    $EfCamp = Read-Host "Enter your camp / location"
+} elseif (($EfCampChoice -match '^\d+$') -and ([int]$EfCampChoice -ge 1) -and ([int]$EfCampChoice -le $EfCamps.Count)) {
+    $EfCamp = $EfCamps[[int]$EfCampChoice - 1]
+} else {
+    # Treat any free-text entry as a custom camp name.
+    $EfCamp = $EfCampChoice
+}
+
+while ([string]::IsNullOrWhiteSpace($EfCamp)) {
+    $EfCamp = Read-Host "Camp / location cannot be empty. Enter your camp"
+}
+Write-Host "Camp set to: $EfCamp"
+
+# MeshMonitor admin password (required by the seeder). Silent input.
+while ($true) {
+    $AdminPasswordSecure = Read-Host "MeshMonitor admin password to set (required, not 'changeme')" -AsSecureString
+    $MeshmonitorAdminPassword = Convert-SecureStringToPlainText -SecureString $AdminPasswordSecure
+    if ([string]::IsNullOrWhiteSpace($MeshmonitorAdminPassword)) {
+        Write-Host "Admin password cannot be empty."
+    } elseif ($MeshmonitorAdminPassword -eq "changeme") {
+        Write-Host "Admin password must not be the default 'changeme'."
+    } else {
+        break
+    }
+}
+
+# Sunrise morning message (optional; default substitutes the camp).
+$EfMorningDefault = if ($env:EF_MORNING_MESSAGE) { $env:EF_MORNING_MESSAGE } else { "$([char]0x1F305) Good Morning from $EfCamp! $([char]0x2600)$([char]0xFE0F)$([char]0x1F332)" }
+$EfMorningInput = Read-Host "Sunrise morning message [$EfMorningDefault]"
+$EfMorningMessage = if ([string]::IsNullOrWhiteSpace($EfMorningInput)) { $EfMorningDefault } else { $EfMorningInput }
+
+$ForceSeed = if ($env:FORCE_SEED) { $env:FORCE_SEED } else { "false" }
+
 $DeployerImageName = if ($env:DEPLOYER_IMAGE_NAME) { $env:DEPLOYER_IMAGE_NAME } else { "meshmonitor-deployer:latest" }
 $PiUsername = if ($env:PI_USERNAME) { $env:PI_USERNAME } else { "pi" }
 $PiSshPort = if ($env:PI_SSH_PORT) { $env:PI_SSH_PORT } else { "22" }
@@ -100,6 +162,10 @@ docker run --rm `
     -e RADIO_MAC=$RadioMac `
     -e PI_USERNAME=$PiUsername `
     -e PI_SSH_PORT=$PiSshPort `
+    -e EF_CAMP=$EfCamp `
+    -e EF_MORNING_MESSAGE=$EfMorningMessage `
+    -e MESHMONITOR_ADMIN_PASSWORD=$MeshmonitorAdminPassword `
+    -e FORCE_SEED=$ForceSeed `
     -e MESHMONITOR_IMAGE=$MeshmonitorImage `
     -e MESHMONITOR_HTTP_PORT=$MeshmonitorHttpPort `
     -e MESHTASTIC_BLE_BRIDGE_IMAGE=$MeshtasticBleBridgeImage `

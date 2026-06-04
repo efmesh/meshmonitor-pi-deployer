@@ -55,6 +55,46 @@ Copy `.env.example` to `.env` and customize as needed. These are minimal require
 - `RADIO_IP` (required when `RADIO_CONNECTION_TYPE=wifi`)
 - `RADIO_MAC` (required when `RADIO_CONNECTION_TYPE=bluetooth`)
 - `TARGET_PI_PASSWORD` (optional convenience; scripts can reuse it)
+- `EF_CAMP` (your camp / location label; prompted if unset)
+- `MESHMONITOR_ADMIN_PASSWORD` (required to seed automations; not `changeme`)
+- `EF_MORNING_MESSAGE` (optional sunrise message; has a camp-substituted default)
+- `FORCE_SEED` (optional; `true` to re-apply seeded automations)
+
+## Electric Forest turnkey automations
+
+This deployer seeds a fresh MeshMonitor instance with a turnkey set of Electric
+Forest automations so your node is useful on the mesh as soon as it comes up:
+
+- **Auto-ack** — replies to test/ping messages with a hop + SNR/RSSI report that
+  mentions your camp.
+- **Auto-ping** — others can DM `ping #` to request a ping test.
+- **Auto-responder** — canned DM replies (`hey`→hey, `ping`→pong, `test`→ack).
+- **Auto-welcome** — one-time DM the first time it sees a new node.
+- **Auto-time-sync** and **auto-key-management** — keep the mesh healthy.
+- **Sunrise announce** — posts a "Good Morning" to forest-chat at 6:05 AM
+  (America/Detroit).
+- Sensible display defaults (map centered on Double JJ Ranch, miles/°F, 12h).
+
+When you run the deploy script you're prompted for three new things:
+
+- **Camp picker** — pick a known Electric Forest camp/area (GA Campgrounds,
+  Good Life Village, Camp Higher Love, Maplewoods, Lucky Lake, The Back 40) or
+  type your own (e.g. `GA Loop 5 by the showers`). This is baked into the
+  seeded messages.
+- **MeshMonitor admin password** — set on first deploy (must not be `changeme`).
+- **Sunrise morning message** — optional; defaults to
+  `🌅 Good Morning from <CAMP>! ☀️🌲`.
+
+These map to the `EF_CAMP`, `MESHMONITOR_ADMIN_PASSWORD`, and
+`EF_MORNING_MESSAGE` variables (see `.env.example`). All seeded values are
+editable later in the MeshMonitor UI under **Settings → Automation**.
+
+Seeding is idempotent: a seed-version marker on the Pi means reruns are a no-op
+once seeded. Set `FORCE_SEED=true` to re-apply the seeded settings.
+
+See [`docs/EF_AUTOMATIONS.md`](docs/EF_AUTOMATIONS.md) for the full automation
+table, efmesh channel assumptions, the sunrise schedule, and airtime notes
+(auto-welcome DMs every new node — dense-mesh users may want it off).
 
 ## Quick start (macOS)
 
@@ -80,7 +120,10 @@ After deployment:
 - Bluetooth mode deploys `meshtastic-ble-bridge` with the provided `RADIO_MAC`
 - MeshMonitor is configured to use `meshtastic-ble-bridge` (`meshtastic-ble-bridge:<MESHTASTIC_BLE_BRIDGE_PORT>`)
 - Visit `http://<PI_IP>/`
-- Login with default MeshMonitor credentials (`admin` / `changeme`)
+- Login as `admin` with the `MESHMONITOR_ADMIN_PASSWORD` you set (the deployer
+  changes the default `changeme` password during seeding)
+- Electric Forest automations are seeded and ready (see
+  [`docs/EF_AUTOMATIONS.md`](docs/EF_AUTOMATIONS.md))
 
 ## Idempotent reruns
 
