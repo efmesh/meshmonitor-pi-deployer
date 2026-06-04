@@ -58,7 +58,7 @@ ef_seed_settings:
   autoResponderTriggers: "[{\"id\":\"efmesh-hey\",\"trigger\":\"hey, hello,hi\",\"responseType\":\"text\",\"response\":\"hey\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"},{\"id\":\"efmesh-ping\",\"trigger\":\"ping\",\"responseType\":\"text\",\"response\":\"pong\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"},{\"id\":\"efmesh-test\",\"trigger\":\"test\",\"responseType\":\"text\",\"response\":\"got your test\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"}]"
   autoWelcomeEnabled: "true"
   autoWelcomeMaxHops: "10"
-  autoWelcomeMessage: "{LONG_NAME}! First time seeing you!"
+  autoWelcomeMessage: "Happy Forest {LONG_NAME}!"
   autoWelcomeTarget: "dm"
   autoWelcomeWaitForName: "true"
   autoTimeSyncEnabled: "true"
