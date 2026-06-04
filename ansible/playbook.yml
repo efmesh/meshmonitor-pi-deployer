@@ -1,0 +1,206 @@
+---
+- name: Provision Raspberry Pi and deploy MeshMonitor
+  hosts: raspberry_pi
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Ensure Python is installed for Ansible modules
+      raw: |
+        test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3 python3-apt)
+      changed_when: false
+
+    - name: Gather facts after Python bootstrap
+      ansible.builtin.setup:
+
+    - name: Set default MeshMonitor radio connection mode
+      ansible.builtin.set_fact:
+        meshmonitor_radio_connection_type: "{{ meshmonitor_radio_connection_type | default('wifi') | lower }}"
+
+    - name: Validate MeshMonitor radio connection mode
+      ansible.builtin.assert:
+        that:
+          - meshmonitor_radio_connection_type in ['wifi', 'bluetooth']
+        fail_msg: "meshmonitor_radio_connection_type must be 'wifi' or 'bluetooth'"
+
+    - name: Validate radio MAC when bluetooth mode is selected
+      ansible.builtin.assert:
+        that:
+          - meshmonitor_radio_mac | length > 0
+          - meshmonitor_radio_mac is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+        fail_msg: "RADIO_MAC must be set to a valid MAC address (AA:BB:CC:DD:EE:FF) when bluetooth mode is selected"
+      when: meshmonitor_radio_connection_type == 'bluetooth'
+
+    - name: Validate radio IP when wifi mode is selected
+      ansible.builtin.assert:
+        that:
+          - meshmonitor_radio_ip | length > 0
+          - meshmonitor_radio_ip is match('^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$')
+        fail_msg: "RADIO_IP must be set to a valid IPv4 address when wifi mode is selected"
+      when: meshmonitor_radio_connection_type == 'wifi'
+
+    - name: Inform user when MeshMonitor bluetooth mode is selected
+      ansible.builtin.debug:
+        msg: "MeshMonitor bluetooth mode selected. Radio {{ meshmonitor_radio_mac }} must already be paired and trusted on the Pi."
+      when: meshmonitor_radio_connection_type == 'bluetooth'
+
+    - name: Inform user when MeshMonitor wifi mode is selected
+      ansible.builtin.debug:
+        msg: "MeshMonitor wifi mode selected. Radio IP {{ meshmonitor_radio_ip }} will be used."
+      when: meshmonitor_radio_connection_type == 'wifi'
+
+  tasks:
+    - name: Install required system packages (might take a few minutes)
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - nginx
+        update_cache: true
+
+    - name: Install bluetooth dependencies for MeshMonitor bluetooth mode
+      ansible.builtin.apt:
+        name:
+          - bluez
+          - bluez-tools
+          - dbus
+        state: present
+      when: meshmonitor_radio_connection_type == 'bluetooth'
+
+    - name: Set Docker repository architecture
+      ansible.builtin.set_fact:
+        docker_repo_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'armhf'}.get(ansible_architecture, 'armhf') }}"
+
+    - name: Ensure apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add Docker GPG key to keyring
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Add Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ docker_repo_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Install Docker engine and compose plugin (might take a few minutes)
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        update_cache: true
+
+    - name: Ensure Docker service is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Ensure meshmonitor directory exists
+      ansible.builtin.file:
+        path: "{{ meshmonitor_compose_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Template docker compose file
+      ansible.builtin.template:
+        src: templates/docker-compose.meshmonitor.yml.j2
+        dest: "{{ meshmonitor_compose_file }}"
+        mode: "0644"
+
+    - name: Deploy meshmonitor container (might take a few minutes)
+      ansible.builtin.command:
+        cmd: docker compose -f {{ meshmonitor_compose_file }} up -d
+      register: compose_up_result
+      changed_when: "'Creating' in compose_up_result.stdout or 'Recreating' in compose_up_result.stdout or 'Starting' in compose_up_result.stdout"
+
+    - name: Template nginx config for meshmonitor
+      ansible.builtin.template:
+        src: templates/meshmonitor.nginx.conf.j2
+        dest: /etc/nginx/sites-available/meshmonitor
+        mode: "0644"
+
+    - name: Enable meshmonitor nginx site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/meshmonitor
+        dest: /etc/nginx/sites-enabled/meshmonitor
+        state: link
+
+    - name: Remove default nginx site if present
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Validate nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+        enabled: true
+
+    - name: Check whether UFW is installed
+      ansible.builtin.command:
+        cmd: which ufw
+      register: ufw_check
+      changed_when: false
+      failed_when: false
+
+    - name: Check UFW status when installed
+      ansible.builtin.command:
+        cmd: ufw status
+      register: ufw_status
+      changed_when: false
+      failed_when: false
+      when: ufw_check.rc == 0
+
+    - name: Allow HTTP through UFW when active
+      ansible.builtin.command:
+        cmd: ufw allow 80/tcp
+      register: ufw_allow_http
+      changed_when: "'Skipping' not in ufw_allow_http.stdout"
+      when:
+        - ufw_check.rc == 0
+        - ufw_status.stdout is defined
+        - "'Status: active' in ufw_status.stdout"
+
+    - name: Check whether firewalld is installed
+      ansible.builtin.command:
+        cmd: which firewall-cmd
+      register: firewalld_check
+      changed_when: false
+      failed_when: false
+
+    - name: Check firewalld status when installed
+      ansible.builtin.command:
+        cmd: firewall-cmd --state
+      register: firewalld_status
+      changed_when: false
+      failed_when: false
+      when: firewalld_check.rc == 0
+
+    - name: Allow HTTP service through firewalld when running
+      ansible.posix.firewalld:
+        service: http
+        state: enabled
+        permanent: true
+        immediate: true
+      when:
+        - firewalld_check.rc == 0
+        - firewalld_status.stdout is defined
+        - firewalld_status.stdout == 'running'

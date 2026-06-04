@@ -1,0 +1,48 @@
+services:
+{% if meshmonitor_radio_connection_type == 'bluetooth' %}
+  meshtastic-ble-bridge:
+    image: "{{ meshtastic_ble_bridge_image }}"
+    container_name: meshtastic-ble-bridge
+    restart: unless-stopped
+    privileged: true
+    environment:
+      RADIO_MAC: "{{ meshmonitor_radio_mac }}"
+      BLE_DEVICE_MAC: "{{ meshmonitor_radio_mac }}"
+      MESHTASTIC_RADIO_MAC: "{{ meshmonitor_radio_mac }}"
+      BRIDGE_PORT: "{{ meshtastic_ble_bridge_port }}"
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+{% endif %}
+
+  meshmonitor:
+    image: "{{ meshmonitor_image }}"
+    container_name: meshmonitor
+    restart: unless-stopped
+    environment:
+      MESHMONITOR_RADIO_CONNECTION_TYPE: "{{ meshmonitor_radio_connection_type }}"
+{% if meshmonitor_radio_connection_type == 'bluetooth' %}
+      # MeshMonitor bluetooth mode: use meshtastic-ble-bridge on the Docker network.
+      MESHMONITOR_RADIO_TRANSPORT: "meshtastic-ble-bridge"
+      MESHMONITOR_MESHTASTIC_BRIDGE_HOST: "meshtastic-ble-bridge"
+      MESHMONITOR_MESHTASTIC_BRIDGE_PORT: "{{ meshtastic_ble_bridge_port }}"
+      MESHMONITOR_MESHTASTIC_BRIDGE_URL: "http://meshtastic-ble-bridge:{{ meshtastic_ble_bridge_port }}"
+      MESHMONITOR_MESHTASTIC_RADIO_MAC: "{{ meshmonitor_radio_mac }}"
+      MESHTASTIC_BLE_BRIDGE_HOST: "meshtastic-ble-bridge"
+      MESHTASTIC_BLE_BRIDGE_PORT: "{{ meshtastic_ble_bridge_port }}"
+      MESHTASTIC_BLE_BRIDGE_URL: "http://meshtastic-ble-bridge:{{ meshtastic_ble_bridge_port }}"
+{% else %}
+      # MeshMonitor can use this to target a wifi transport path.
+      MESHMONITOR_RADIO_TRANSPORT: "wifi"
+      MESHMONITOR_MESHTASTIC_WIFI_RADIO_IP: "{{ meshmonitor_radio_ip }}"
+      MESHMONITOR_MESHTASTIC_WIFI_RADIO_HOST: "{{ meshmonitor_radio_ip }}"
+      MESHMONITOR_MESHTASTIC_RADIO_IP: "{{ meshmonitor_radio_ip }}"
+      MESHMONITOR_RADIO_IP: "{{ meshmonitor_radio_ip }}"
+{% endif %}
+{% if meshmonitor_radio_connection_type == 'bluetooth' %}
+    depends_on:
+      - meshtastic-ble-bridge
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+{% endif %}
+    ports:
+      - "{{ meshmonitor_http_port }}:80"
