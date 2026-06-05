@@ -21,6 +21,9 @@ RUN ansible-galaxy collection install -r /tmp/requirements.yml
 
 COPY ansible /workspace/ansible
 COPY scripts/container-run.sh /workspace/scripts/container-run.sh
-RUN chmod +x /workspace/scripts/container-run.sh
+# Normalize line endings (strip any CR) so the entrypoint shebang never becomes
+# `#!/usr/bin/env sh\r`, which fails with: env: 'sh\r': No such file or directory.
+RUN sed -i 's/\r$//' /workspace/scripts/container-run.sh \
+    && chmod +x /workspace/scripts/container-run.sh
 
 ENTRYPOINT ["/workspace/scripts/container-run.sh"]

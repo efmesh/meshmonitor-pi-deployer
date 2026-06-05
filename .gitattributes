@@ -1,0 +1,5 @@
+# Force LF for shell scripts and templated scripts so shebangs never break with
+# a CR (env: 'sh\r': No such file or directory) when built/run in Linux containers.
+*.sh text eol=lf
+*.sh.j2 text eol=lf
+scripts/container-run.sh text eol=lf
