@@ -219,6 +219,220 @@ again picks up where it needs to.
 
 ---
 
+## Deploying off-grid at camp (no router, battery + solar)
+
+Most people run these Pis **off-grid** — at a campsite, on a LiFePO4 power
+station (an EcoFlow River or similar) with solar panels, and **no internet
+router anywhere nearby**. The walkthrough above assumes you're on home Wi-Fi.
+This section covers what's different when there's no router at camp.
+
+The good news: **MeshMonitor doesn't need the internet to work.** It talks to
+your Meshtastic radio *locally* (over your local network in Wi-Fi mode, or
+directly over Bluetooth), and the dashboard is served by the Pi itself. The only
+thing a router normally gives you is a way for your phone and the Pi to find each
+other on the same network — and there are easy ways to do that with no router at
+all (covered below). What you lose off-grid is only the things that genuinely
+need the internet (see "What works offline vs. what doesn't").
+
+### Set up at home first, deploy at camp (strongly recommended)
+
+Do **not** make camp the first place you try to get this working. Trying to
+debug Wi-Fi, SSH, Docker, and a fresh node all at once — in the dirt, on
+battery, with no internet to look things up — is miserable. Instead:
+
+**At home, on your Wi-Fi (where you have internet and a screen):**
+
+1. Run the entire "Brand-new to all of this? Start here" walkthrough above,
+   start to finish, against the Pi on your home Wi-Fi.
+2. **Verify the dashboard actually works** — open `http://<your-pi-ip>/`, log in,
+   and confirm you see the MeshMonitor UI and (once your radio has heard some
+   traffic) nodes showing up. This is your proof that the Pi, Docker,
+   MeshMonitor, and the radio connection are all good.
+3. **Pre-add your camp network** to the Pi now, while you still have internet to
+   fix any mistakes (see "Phone hotspot" or "Pi as its own access point" below).
+   This is the single most important off-grid prep step — the Pi can't join a
+   network at camp that it was never told about.
+4. Power off cleanly: `sudo shutdown -h now` (run on the Pi, or over SSH), wait
+   for the activity light to stop, then unplug.
+
+**At camp:**
+
+- Power the Pi from your battery/solar station (see "Power" below).
+- Power on your Meshtastic radio.
+- The Pi boots and **automatically joins whichever known network it can find** —
+  your phone hotspot, or its own access point — because you set that up at home.
+- Open the dashboard from your phone (see "Finding the Pi at camp").
+
+If the radio's **IP address changes** between home and camp (common in Wi-Fi
+mode if it gets a new address from a different network), re-run the deployer once
+with the new `RADIO_IP` — it's safe to re-run (see "Idempotent reruns"). This is
+a good reason to favor **Bluetooth mode** for a truly portable node: the radio is
+addressed by its fixed MAC, so nothing to update when you move. See
+[`docs/BLUETOOTH_GUIDE.md`](docs/BLUETOOTH_GUIDE.md).
+
+### At-camp networking: getting your phone and the Pi on the same network
+
+Pick **one** of the two approaches below. Run all `nmcli` commands **on the Pi**
+(over SSH from home, or with a keyboard/monitor plugged into the Pi). Recent
+Raspberry Pi OS (Bookworm and newer) uses **NetworkManager**, so these are the
+correct, current commands — ignore older guides that edit
+`/etc/dhcpcd.conf` or `wpa_supplicant.conf`.
+
+#### Option A — Phone hotspot (you want the Pi online via your phone)
+
+Best when you have cell signal and want the Pi (and you) to reach the internet
+through your phone. You pre-teach the Pi your hotspot's name and password at
+home, as a *second* known network, so it auto-joins at camp.
+
+**At home, add your hotspot as a known network** (replace the SSID and password
+with your phone's hotspot name and password):
+
+```bash
+sudo nmcli connection add type wifi con-name camp-hotspot \
+  ifname wlan0 ssid "Will's iPhone" \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "your-hotspot-password"
+
+# Make the Pi prefer your home Wi-Fi when it's around, and fall back to the
+# hotspot at camp (higher number = higher priority).
+sudo nmcli connection modify "preconfigured" connection.autoconnect-priority 20
+sudo nmcli connection modify camp-hotspot connection.autoconnect-priority 10
+```
+
+> `preconfigured` is the connection name Raspberry Pi Imager creates for your
+> home Wi-Fi. List your saved connections with `nmcli connection show` if you're
+> not sure what yours is called, and use that name instead.
+
+Now the Pi will join home Wi-Fi at home and your hotspot at camp, with no
+changes needed on-site.
+
+**iPhone hotspot gotchas (these trip people up):**
+
+- Turn **on** *Settings → Personal Hotspot → **Maximize Compatibility***. Without
+  it, the iPhone runs the hotspot on 5GHz only, and the Pi's built-in Wi-Fi joins
+  far more reliably on **2.4GHz**. (Maximize Compatibility forces 2.4GHz.)
+- The hotspot must be **awake and broadcasting when the Pi boots.** iPhones put
+  the hotspot to sleep when nothing is connected. Open *Settings → Personal
+  Hotspot* and **leave that screen open** while the Pi powers on, or connect
+  another device first to wake it, so the Pi sees the network and joins.
+- The SSID and password must **exactly** match what you typed at home, including
+  the apostrophe/curly quotes iPhones use in names like `Will's iPhone`. If in
+  doubt, rename your hotspot to something plain (`Settings → General → About →
+  Name`) and re-add it with the simple name.
+
+#### Option B — Pi as its own access point (zero internet, zero router)
+
+Best when there's **no cell signal at all**. The Pi broadcasts its **own**
+Wi-Fi network; your phone connects directly to the Pi and opens the dashboard.
+No router, no hotspot, no internet required — and MeshMonitor still works fully,
+because it only ever needed to talk to your radio locally.
+
+**At home, turn the Pi into an access point** (choose your own network name and
+a password of at least 8 characters):
+
+```bash
+sudo nmcli connection add type wifi ifname wlan0 con-name camp-ap \
+  autoconnect yes ssid "MeshMonitor-Camp"
+sudo nmcli connection modify camp-ap \
+  802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "pick-a-password"
+sudo nmcli connection up camp-ap
+```
+
+`ipv4.method shared` makes NetworkManager hand out IP addresses to whatever
+connects, and the Pi reaches itself at the fixed address **`10.42.0.1`**.
+
+At camp:
+
+1. On your phone, join the Wi-Fi network **`MeshMonitor-Camp`** with the password
+   you set.
+2. Open a browser and go to **`http://10.42.0.1/`** — that's your dashboard.
+
+> **Important trade-off:** the Pi's single built-in Wi-Fi radio can't be both an
+> access point *and* a client at the same time. While `camp-ap` is the active
+> connection, the Pi is **not** on any other Wi-Fi — so in **Wi-Fi radio mode**
+> your Meshtastic node would need to be on the Pi's AP network too, which is
+> awkward. **For Option B, use Bluetooth radio mode** (the node connects to the
+> Pi over Bluetooth, totally independent of Wi-Fi) — that's the clean off-grid
+> setup. See [`docs/BLUETOOTH_GUIDE.md`](docs/BLUETOOTH_GUIDE.md).
+>
+> To switch the Pi back to joining your home Wi-Fi later:
+> `sudo nmcli connection down camp-ap` (and `up camp-ap` to go back to AP mode).
+
+### Finding the Pi at camp (no router admin page to check)
+
+With no router, you can't look the Pi up in a router device list. Use one of
+these instead:
+
+- **Option B (Pi access point):** the address is always **`http://10.42.0.1/`**.
+  Nothing to look up.
+- **mDNS / `.local` name:** from a phone or laptop on the same network, just use
+  the Pi's hostname — `http://<pi-hostname>.local/` (for example
+  `http://meshmonitor.local/` if you named the Pi `meshmonitor`, or
+  `http://raspberrypi.local/` for the default). This works on iPhone and modern
+  Android browsers and needs no router. Don't remember the hostname? Run
+  `hostname` on the Pi.
+- **Option A (phone hotspot):** some phones list connected devices and their IPs
+  in the hotspot screen; otherwise `.local` (above) is the easy path.
+
+### What works offline vs. what doesn't
+
+**Works with no internet at all** (this is the whole point):
+
+- The MeshMonitor dashboard, login, node list, map, and messaging.
+- Sending/receiving on the mesh and all the seeded Electric Forest automations —
+  these run on the Pi and the radio, which never needed the internet.
+
+**Needs internet** (so these only work when the Pi is online via Option A, or at
+home):
+
+- The **first-time install** (the deployer downloads Docker and container images
+  — do this at home before you leave).
+- Pulling **updated** container images later.
+- The map's background **tiles** if MeshMonitor fetches them from an online map
+  service — the map *positions* still work, but tiles may not render until the
+  Pi has internet once. Mesh data, nodes, and messaging are unaffected.
+
+### Power: running on an EcoFlow River / solar generator
+
+A Raspberry Pi sips power, which is why this works so well off-grid.
+
+- **Draw:** a Pi 4 idles around **3–4W** (up to ~6W under load); a Pi 5 idles
+  around **2.7–3W**. Add your USB-powered Meshtastic node and Wi-Fi/Bluetooth
+  overhead and the whole setup pulls roughly **4–8W** in normal use. Call it
+  ~5–6W average for runtime math.
+
+- **Runtime per battery** (rough, at ~5W average draw; real-world usable energy
+  is a bit below the rated Wh because of conversion losses, so these are
+  conservative):
+
+  | Power station (class) | Rated capacity | Approx. runtime at ~5W |
+  | --- | --- | --- |
+  | EcoFlow River 3 / River 2 | ~245–268 Wh | ~1.5–2 days |
+  | EcoFlow River 2 Max | ~512 Wh | ~3.5–4 days |
+  | EcoFlow River 2 Pro | ~768 Wh | ~5–6 days |
+
+  Even a **small** solar panel (40–60W) in a few hours of sun makes far more than
+  a Pi uses in a day, so with any sun you can run **indefinitely** — the battery
+  is really just there to carry you overnight and through cloudy stretches.
+
+- **Power the Pi from a USB-C or DC port, not the AC inverter.** Power stations
+  have an **idle/eco auto-shutoff**: if the only thing plugged into the **AC**
+  outlets draws very little (a few watts), the inverter decides nothing's there
+  and **switches itself off**, killing your Pi. Using the unit's **USB-C** output
+  (or a 12V DC output with a buck converter) avoids that entirely *and* skips the
+  inverter's conversion loss, so you get more hours per charge. If you must use
+  AC, disable the unit's auto-shutoff/eco setting in the EcoFlow app.
+
+- **Use a quality 5V supply that can deliver enough current.** A Pi 4 wants a
+  **5V / 3A** (15W) supply; a Pi 5 wants **5V / 5A** (the official 27W USB-C PD
+  supply) to run at full speed. Underpowering the Pi causes the dreaded
+  low-voltage warning, random reboots, and SD-card corruption — exactly the kind
+  of "it worked at home but dies at camp" problem you want to avoid. Use the
+  official Pi supply or a known-good USB-C cable rated for the current; thin or
+  long cheap cables drop voltage and cause brownouts.
+
+---
+
 ## What this deployer does
 
 - Connects to your Raspberry Pi over SSH.
