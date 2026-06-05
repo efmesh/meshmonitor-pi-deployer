@@ -3,7 +3,7 @@ meshmonitor_image: "{{ lookup('env', 'MESHMONITOR_IMAGE') | default('ghcr.io/yer
 meshmonitor_http_port: "{{ lookup('env', 'MESHMONITOR_HTTP_PORT') | default('8080', true) }}"
 meshmonitor_radio_ip: "{{ lookup('env', 'RADIO_IP') | default('', true) }}"
 meshmonitor_radio_mac: "{{ lookup('env', 'RADIO_MAC') | default('', true) }}"
-meshtastic_ble_bridge_image: "{{ lookup('env', 'MESHTASTIC_BLE_BRIDGE_IMAGE') | default('ghcr.io/meshtastic/meshtastic-ble-bridge:latest', true) }}"
+meshtastic_ble_bridge_image: "{{ lookup('env', 'MESHTASTIC_BLE_BRIDGE_IMAGE') | default('ghcr.io/yeraze/meshtastic-ble-bridge:latest', true) }}"
 meshtastic_ble_bridge_port: "{{ lookup('env', 'MESHTASTIC_BLE_BRIDGE_PORT') | default('4403', true) }}"
 meshmonitor_compose_dir: /opt/meshmonitor
 meshmonitor_compose_file: "{{ meshmonitor_compose_dir }}/docker-compose.yml"

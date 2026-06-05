@@ -152,7 +152,7 @@ $DeployerImageName = if ($env:DEPLOYER_IMAGE_NAME) { $env:DEPLOYER_IMAGE_NAME } 
 $PiSshPort = if ($env:PI_SSH_PORT) { $env:PI_SSH_PORT } else { "22" }
 $MeshmonitorImage = if ($env:MESHMONITOR_IMAGE) { $env:MESHMONITOR_IMAGE } else { "ghcr.io/yeraze/meshmonitor:latest" }
 $MeshmonitorHttpPort = if ($env:MESHMONITOR_HTTP_PORT) { $env:MESHMONITOR_HTTP_PORT } else { "8080" }
-$MeshtasticBleBridgeImage = if ($env:MESHTASTIC_BLE_BRIDGE_IMAGE) { $env:MESHTASTIC_BLE_BRIDGE_IMAGE } else { "ghcr.io/meshtastic/meshtastic-ble-bridge:latest" }
+$MeshtasticBleBridgeImage = if ($env:MESHTASTIC_BLE_BRIDGE_IMAGE) { $env:MESHTASTIC_BLE_BRIDGE_IMAGE } else { "ghcr.io/yeraze/meshtastic-ble-bridge:latest" }
 $MeshtasticBleBridgePort = if ($env:MESHTASTIC_BLE_BRIDGE_PORT) { $env:MESHTASTIC_BLE_BRIDGE_PORT } else { "4403" }
 
 docker build -t $DeployerImageName $ProjectDir

@@ -137,6 +137,6 @@ docker run --rm \
   -e FORCE_SEED="${FORCE_SEED:-false}" \
   -e MESHMONITOR_IMAGE="${MESHMONITOR_IMAGE:-ghcr.io/yeraze/meshmonitor:latest}" \
   -e MESHMONITOR_HTTP_PORT="${MESHMONITOR_HTTP_PORT:-8080}" \
-  -e MESHTASTIC_BLE_BRIDGE_IMAGE="${MESHTASTIC_BLE_BRIDGE_IMAGE:-ghcr.io/meshtastic/meshtastic-ble-bridge:latest}" \
+  -e MESHTASTIC_BLE_BRIDGE_IMAGE="${MESHTASTIC_BLE_BRIDGE_IMAGE:-ghcr.io/yeraze/meshtastic-ble-bridge:latest}" \
   -e MESHTASTIC_BLE_BRIDGE_PORT="${MESHTASTIC_BLE_BRIDGE_PORT:-4403}" \
   "$DEPLOYER_IMAGE_NAME"
