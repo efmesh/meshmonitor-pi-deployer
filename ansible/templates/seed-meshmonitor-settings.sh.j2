@@ -25,7 +25,18 @@ COOKIE_JAR="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
 log() { printf '[ef-seed] %s\n' "$*"; }
+warn() { printf '[ef-seed][WARNING] %s\n' "$*" >&2; }
 fail() { printf '[ef-seed][ERROR] %s\n' "$*" >&2; exit 1; }
+
+# --- Validate admin password -------------------------------------------------
+# MeshMonitor enforces an 8-character minimum on the admin password (see
+# change-password in MeshMonitor's localAuth). If a shorter password slips
+# through, the change-password call below returns HTTP 400 and the instance is
+# left on the default 'changeme' — a silent security footgun. Catch it here with
+# a clear message instead of a cryptic mid-run failure.
+if [ "${#ADMIN_PASSWORD}" -lt 8 ]; then
+  fail "Admin password must be at least 8 characters (MeshMonitor requirement). Re-run with a longer MESHMONITOR_ADMIN_PASSWORD."
+fi
 
 # --- Idempotency -------------------------------------------------------------
 if [ "$FORCE_SEED" != "true" ] && [ -f "$MARKER_FILE" ]; then
@@ -69,31 +80,52 @@ login() {
 }
 
 # --- Authenticate ------------------------------------------------------------
-# Prefer the configured admin password (rerun / already-changed case); on 401
-# fall back to the MeshMonitor default and change it.
+# A fresh MeshMonitor ships with admin/changeme only, so on the FIRST deploy a
+# login with your configured password legitimately returns 401 — that is
+# expected, not an error. We then log in with the default and immediately change
+# the password to yours. On reruns your configured password already works and we
+# skip straight through. The invariant on exit: the instance is on YOUR password,
+# never on 'changeme'.
 log "Authenticating ..."
 CODE="$(login "$ADMIN_PASSWORD")"
 if [ "$CODE" = "200" ]; then
-  log "Logged in with configured admin password."
+  log "Logged in with your configured admin password (already set on a prior deploy)."
 elif [ "$CODE" = "401" ]; then
-  log "Configured password rejected; trying default admin/changeme ..."
+  log "First deploy: your password isn't set yet, logging in with the MeshMonitor default to set it ..."
   CODE="$(login "changeme")"
-  [ "$CODE" = "200" ] || fail "Login failed with both configured password and default (HTTP $CODE)"
-  log "Logged in with default credentials; changing admin password ..."
+  [ "$CODE" = "200" ] || fail "Could not log in with your configured password OR the default 'changeme'. The instance may already have a different admin password set, or admin setup hasn't finished — check the MeshMonitor container logs. (HTTP $CODE)"
+  log "Logged in with default credentials; changing the admin password to yours ..."
   CSRF="$(get_csrf)"
-  CHCODE="$(curl -s -o /dev/null -w '%{http_code}' \
+  CHBODY_FILE="$(mktemp)"
+  CHCODE="$(curl -s -o "$CHBODY_FILE" -w '%{http_code}' \
     -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
     -X POST "$BASE_URL/api/auth/change-password" \
     -H 'Content-Type: application/json' \
     -H "X-CSRF-Token: $CSRF" \
     --data "$(python3 -c 'import json,sys; print(json.dumps({"currentPassword":"changeme","newPassword":sys.argv[1]}))' "$ADMIN_PASSWORD")")"
-  [ "$CHCODE" = "200" ] || fail "Password change failed (HTTP $CHCODE)"
-  log "Password changed. Re-authenticating with new password ..."
+  if [ "$CHCODE" != "200" ]; then
+    warn "MeshMonitor rejected the password change (HTTP $CHCODE):"
+    cat "$CHBODY_FILE" >&2 || true
+    rm -f "$CHBODY_FILE"
+    fail "Password change FAILED. The instance is still on the default 'changeme' — log in and change it manually, then re-run. (Common cause: password shorter than 8 characters.)"
+  fi
+  rm -f "$CHBODY_FILE"
+  log "Password changed. Re-authenticating with your new password ..."
   CODE="$(login "$ADMIN_PASSWORD")"
-  [ "$CODE" = "200" ] || fail "Re-login after password change failed (HTTP $CODE)"
+  [ "$CODE" = "200" ] || fail "Re-login after password change failed (HTTP $CODE). The instance may be in an inconsistent auth state — check the container logs."
 else
-  fail "Unexpected login response (HTTP $CODE)"
+  fail "Unexpected login response (HTTP $CODE). Check that MeshMonitor finished starting and that admin setup completed."
 fi
+
+# Belt-and-suspenders: confirm 'changeme' no longer works, so we can never
+# silently report success while the instance is left on the default password.
+DEFCHECK="$(login "changeme")"
+if [ "$DEFCHECK" = "200" ]; then
+  fail "SECURITY: the default 'changeme' password still works after seeding. Your configured password was NOT applied. Log in and change it manually, then re-run."
+fi
+# Restore our authenticated session for the settings POST below (the changeme
+# probe above replaced the session cookie).
+login "$ADMIN_PASSWORD" >/dev/null
 
 # --- Seed settings -----------------------------------------------------------
 # All values are flat strings. Camp and morning message are substituted via
@@ -164,3 +196,4 @@ rm -f "$VERIFY_FILE"
 # --- Record seed version -----------------------------------------------------
 printf '%s\n' "$SEED_VERSION" > "$MARKER_FILE"
 log "Seed complete. Recorded seed version $SEED_VERSION at $MARKER_FILE."
+log "Admin login is 'admin' with the password you configured (the default 'changeme' is no longer valid)."

@@ -1,3 +1,13 @@
+# Maps the Connection header for WebSocket upgrades: "upgrade" when the client
+# requests an Upgrade, empty otherwise (so keep-alive still works). This lives
+# in the http{} context via sites-enabled being included from nginx.conf's http
+# block. Defined here (guarded against duplicate definition is not possible in
+# nginx, so this file is the single owner of the map).
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 server {
     listen 80;
     server_name _;
@@ -9,5 +19,17 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # MeshMonitor pushes live data over a Socket.IO WebSocket. Without these
+        # Upgrade headers nginx strips the handshake, the connection falls back
+        # to slow long-polling, and the dashboard can look stuck/blank on a fresh
+        # node until data trickles in. Forwarding the upgrade lets the realtime
+        # connection establish immediately.
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # Realtime/long-poll connections should not be cut off by short timeouts.
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 }

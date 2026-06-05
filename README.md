@@ -35,7 +35,9 @@ This setting does not control how your computer connects to the Pi for deploymen
 - This repository cloned to your local machine ([GitHub cloning guide](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository))
 - Docker Desktop installed and running ([Windows](https://docs.docker.com/desktop/setup/install/windows-install/) or [macOS](https://docs.docker.com/desktop/setup/install/mac-install/))
 - Raspberry Pi reachable via SSH from the machine running the deployer ([Pi Getting Started guide](https://www.raspberrypi.com/documentation/computers/getting-started.html#install))
-- Pi user has sudo privileges (default username is `pi`)
+- Pi user has sudo privileges. The deployer prompts for the SSH username and
+  defaults to `pi`, but recent Raspberry Pi OS images no longer create a `pi`
+  user automatically — use the username you set up during Pi imaging.
 
 ## Verified Pi devices and OS versions
 
@@ -56,7 +58,8 @@ Copy `.env.example` to `.env` and customize as needed. These are minimal require
 - `RADIO_MAC` (required when `RADIO_CONNECTION_TYPE=bluetooth`)
 - `TARGET_PI_PASSWORD` (optional convenience; scripts can reuse it)
 - `EF_CAMP` (your camp / location label; prompted if unset)
-- `MESHMONITOR_ADMIN_PASSWORD` (required to seed automations; not `changeme`)
+- `MESHMONITOR_ADMIN_PASSWORD` (required to seed automations; at least 8
+  characters, not `changeme`; any characters allowed including spaces/emoji)
 - `EF_MORNING_MESSAGE` (optional sunrise message; has a camp-substituted default)
 - `FORCE_SEED` (optional; `true` to re-apply seeded automations)
 
@@ -121,9 +124,19 @@ After deployment:
 - MeshMonitor is configured to use `meshtastic-ble-bridge` (`meshtastic-ble-bridge:<MESHTASTIC_BLE_BRIDGE_PORT>`)
 - Visit `http://<PI_IP>/`
 - Login as `admin` with the `MESHMONITOR_ADMIN_PASSWORD` you set (the deployer
-  changes the default `changeme` password during seeding)
+  changes the default `changeme` password during seeding and verifies the
+  default no longer works — if seeding can't set your password it fails loudly
+  rather than silently leaving `changeme` in place)
 - Electric Forest automations are seeded and ready (see
   [`docs/EF_AUTOMATIONS.md`](docs/EF_AUTOMATIONS.md))
+
+### First load: a brief blank screen is normal
+
+MeshMonitor is a single-page web app. On the very first visit you may see a
+blank/white screen for a few seconds while it loads and connects to your radio —
+this is more noticeable on slower Pis. If it stays blank, hard-refresh
+(`Ctrl/Cmd+Shift+R`). A brand-new node also starts with an empty node/map view
+until it hears traffic from the mesh; that is expected and fills in over time.
 
 ## Idempotent reruns
 

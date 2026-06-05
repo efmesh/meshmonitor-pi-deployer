@@ -55,9 +55,11 @@
           - ef_camp | length > 0
           - meshmonitor_admin_password | length > 0
           - meshmonitor_admin_password != 'changeme'
+          - meshmonitor_admin_password | length >= 8
         fail_msg: >-
           EF_CAMP and MESHMONITOR_ADMIN_PASSWORD are required to seed Electric
-          Forest automations, and the admin password must not be 'changeme'.
+          Forest automations. The admin password must not be 'changeme' and must
+          be at least 8 characters (MeshMonitor's minimum).
 
   tasks:
     - name: Install required system packages (might take a few minutes)
@@ -265,3 +267,26 @@
     - name: Show Electric Forest seeding result
       ansible.builtin.debug:
         msg: "{{ ef_seed_result.stdout_lines }}"
+
+  post_tasks:
+    - name: Deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - "MeshMonitor deployed successfully."
+          - "------------------------------------------------------------"
+          - "Open it in a browser:  http://{{ ansible_host | default(inventory_hostname) }}/"
+          - "Log in as:             admin"
+          - "Password:              the MESHMONITOR_ADMIN_PASSWORD you set"
+          - "                       (the default 'changeme' is now disabled)"
+          - "------------------------------------------------------------"
+          - "First load note: MeshMonitor is a single-page app. The very first"
+          - "load can show a brief blank/white screen for a few seconds while it"
+          - "starts up and connects to your radio — especially on slower Pis."
+          - "If it stays blank, hard-refresh (Ctrl/Cmd+Shift+R). The dashboard"
+          - "fills in as your radio reports nodes; an empty node list on a brand"
+          - "new node is normal until it hears mesh traffic."
+          - "------------------------------------------------------------"
+          - "Electric Forest automations are seeded and editable in the UI under"
+          - "Settings -> Automation."
+          - "============================================================"

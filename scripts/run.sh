@@ -17,6 +17,10 @@ else
   read -rp "Pi IP address: " TARGET_PI_IP
 fi
 
+DEFAULT_PI_USERNAME="${PI_USERNAME:-pi}"
+read -rp "Pi SSH username [$DEFAULT_PI_USERNAME]: " PI_USERNAME_INPUT
+PI_USERNAME="${PI_USERNAME_INPUT:-$DEFAULT_PI_USERNAME}"
+
 TARGET_PI_PASSWORD_VALUE="${TARGET_PI_PASSWORD:-}"
 if [[ -n "$TARGET_PI_PASSWORD_VALUE" ]]; then
   read -rsp "Pi password [press Enter to use TARGET_PI_PASSWORD from .env]: " TARGET_PI_PASSWORD_INPUT
@@ -105,6 +109,8 @@ while true; do
     echo "Admin password cannot be empty."
   elif [[ "$MESHMONITOR_ADMIN_PASSWORD" == "changeme" ]]; then
     echo "Admin password must not be the default 'changeme'."
+  elif [[ "${#MESHMONITOR_ADMIN_PASSWORD}" -lt 8 ]]; then
+    echo "Admin password must be at least 8 characters (MeshMonitor requirement)."
   else
     break
   fi
