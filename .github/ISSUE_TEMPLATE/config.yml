@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: EF Meshtastic guide (efmesh.com)
+    url: https://efmesh.com
+    about: The bigger picture — recommended node hardware, antennas, settings, camp relay nodes, and how to connect at Electric Forest. Start here if your question is about the radios/mesh itself rather than this deployer.
+  - name: Electric Forest Discord
+    url: https://discord.gg/electricforest
+    about: Chat with the EF community in real time. Good for quick questions and meeting other people running nodes at the Forest.

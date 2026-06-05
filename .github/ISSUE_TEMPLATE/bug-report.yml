@@ -1,0 +1,123 @@
+name: Something went wrong
+description: The deployer or your MeshMonitor dashboard isn't working the way the guide says it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry it broke! Fill in what you can below — even partial answers help a lot.
+        You do **not** need to be technical to file this. Just tell us what you saw.
+
+        **Before you start — one safety note:** when you paste your install output
+        further down, do **not** include any passwords. The deployer is built so it
+        never prints your Pi password or your dashboard password on screen, so a
+        normal copy-paste is fine. But if you copied your *entire* terminal window,
+        glance over it first and replace anything you typed that looks like a
+        password or a secret with the word `REDACTED`.
+  - type: dropdown
+    id: step
+    attributes:
+      label: Which step were you on when it broke?
+      description: From the "Brand-new to all of this? Start here" walkthrough in the README. Pick the closest one.
+      options:
+        - "1–2 — Downloading the project (git clone) / opening the folder"
+        - "3 — Checking Docker is running (docker --version)"
+        - "4 — Starting the deployer (./scripts/run.sh or run.ps1)"
+        - "5–7 — Typing the Pi's IP address, username, or password"
+        - "8–9 — Choosing wifi/bluetooth and entering the radio's IP or MAC"
+        - "10–11 — Picking the camp / setting the dashboard password"
+        - "12 — Waiting while it installs (the long status stream)"
+        - "13 — Opening the dashboard in a browser after it finished"
+        - "Off-grid at camp — phone hotspot / Pi access point / finding the Pi"
+        - "Something else / I'm not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what-you-did
+    attributes:
+      label: What did you click or type right before it broke?
+      description: Just describe it in plain words — e.g. "I typed my Pi's IP and pressed Enter" or "I opened the dashboard address in Safari".
+      placeholder: I got to the part where it asks for the radio IP, typed it in, and...
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you actually see? Copy any red error text or message word-for-word if you can.
+      placeholder: It showed an error that said "permission denied" and stopped.
+    validations:
+      required: true
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What did you expect to happen instead?
+      placeholder: I expected it to keep going and finish installing.
+    validations:
+      required: true
+  - type: dropdown
+    id: pi-model
+    attributes:
+      label: Which Raspberry Pi do you have?
+      options:
+        - "Raspberry Pi 5"
+        - "Raspberry Pi 4"
+        - "Raspberry Pi 3"
+        - "Raspberry Pi Zero / Zero 2"
+        - "Older / not sure"
+    validations:
+      required: true
+  - type: input
+    id: pi-os
+    attributes:
+      label: Which Raspberry Pi OS version (if you know it)?
+      description: "Optional. If you're not sure, leave blank. On the Pi you can run: cat /etc/os-release"
+      placeholder: "Raspberry Pi OS (Bookworm), 64-bit"
+    validations:
+      required: false
+  - type: dropdown
+    id: deployment-type
+    attributes:
+      label: How is the Pi connected to the network?
+      description: This matters a lot for connection problems.
+      options:
+        - "Home Wi-Fi (normal router at home)"
+        - "Phone hotspot (Option A in the off-grid camp guide)"
+        - "Pi is its own Wi-Fi access point (Option B in the off-grid camp guide)"
+        - "Not sure"
+    validations:
+      required: true
+  - type: dropdown
+    id: radio-mode
+    attributes:
+      label: How does MeshMonitor talk to your Meshtastic radio?
+      options:
+        - "Wi-Fi (I gave it the radio's IP address)"
+        - "Bluetooth (I gave it the radio's MAC address)"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: install-output
+    attributes:
+      label: Paste the end of your install output
+      description: |
+        This is the most useful thing you can give us. Scroll to the **bottom** of
+        your terminal — where it stopped or showed the summary box — and copy the
+        last 30–40 lines, then paste them here.
+
+        Remember the safety note at the top: no passwords. The deployer doesn't
+        print them, but double-check before pasting.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Quick checks
+      options:
+        - label: I double-checked that no passwords or secrets are in what I pasted above.
+          required: true
+        - label: I'm on the same network as the Pi (or following the off-grid camp guide).
+          required: false

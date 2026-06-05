@@ -4,6 +4,11 @@ This project helps new users deploy [MeshMonitor](https://meshmonitor.org/) to a
 
 Your local machine only needs Docker. Deployment runs inside a container that executes an [Ansible](https://docs.ansible.com/#get_started) playbook against your Pi.
 
+> **New to the mesh side of this?** This project is just the dashboard piece. For
+> the bigger picture — which Meshtastic node hardware and antennas to buy,
+> recommended radio settings, stationary camp relay nodes, and how to connect at
+> Electric Forest — see the EF Meshtastic guide at **[efmesh.com](https://efmesh.com)**.
+
 ---
 
 ## Brand-new to all of this? Start here
@@ -593,3 +598,13 @@ For current configuration details and walkthrough, use this video:
 ## More docs
 
 - Advanced internals and customization: [docs/ADVANCED_GUIDE.md](docs/ADVANCED_GUIDE.md)
+
+---
+
+## Found a problem? Need help?
+
+Stuck, or hit an error? **[Open a new issue](https://github.com/efmesh/meshmonitor-pi-deployer/issues/new/choose)** — you'll get a short, fill-in-the-blank form (no technical experience needed). There's one for "something went wrong" and a simpler one for "I'm stuck / I have a question."
+
+The most helpful thing you can include is the **end of your install output** — scroll to the bottom of your terminal where it stopped or showed the summary box, and paste the last 30–40 lines. (Don't paste passwords; the deployer doesn't print them, but glance over it first.)
+
+For questions about the mesh itself — node hardware, antennas, settings, or connecting at the Forest — the [efmesh.com](https://efmesh.com) guide and the [Electric Forest Discord](https://discord.gg/electricforest) are the place to go.

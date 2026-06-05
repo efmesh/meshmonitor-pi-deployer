@@ -1,0 +1,44 @@
+name: I'm stuck / I have a question
+description: You're not sure what to do next, or something in the guide doesn't make sense. No error required.
+title: "[Help] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No problem — ask away. There are no dumb questions here. Tell us what
+        you're trying to do and where you got stuck, and we'll help.
+
+        If you want to paste anything from your screen, just don't include
+        passwords. The deployer doesn't print them, but glance over it first.
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do, and what's confusing you?
+      description: Plain words are perfect. The more you tell us, the faster we can help.
+      placeholder: |
+        I'm trying to get this working at a campsite with no router. I read the
+        off-grid section but I'm not sure whether to use the phone hotspot or the
+        Pi-as-access-point option...
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Roughly where are you in the process?
+      options:
+        - "Haven't started yet — just reading and planning"
+        - "Setting up the Pi / installing software on my computer"
+        - "Running the deployer for the first time"
+        - "It deployed, but I can't open or log into the dashboard"
+        - "Trying to set it up for off-grid / camp use"
+        - "Something else"
+    validations:
+      required: false
+  - type: input
+    id: pi-model
+    attributes:
+      label: Which Raspberry Pi do you have? (optional)
+      placeholder: "Pi 4, Pi 5, not sure..."
+    validations:
+      required: false
