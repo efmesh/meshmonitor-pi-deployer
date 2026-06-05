@@ -34,7 +34,7 @@ fail() { printf '[ef-seed][ERROR] %s\n' "$*" >&2; exit 1; }
 # through, the change-password call below returns HTTP 400 and the instance is
 # left on the default 'changeme' — a silent security footgun. Catch it here with
 # a clear message instead of a cryptic mid-run failure.
-if [ "${#ADMIN_PASSWORD}" -lt 8 ]; then
+if [ "$(printf '%s' "$ADMIN_PASSWORD" | wc -c)" -lt 8 ]; then
   fail "Admin password must be at least 8 characters (MeshMonitor requirement). Re-run with a longer MESHMONITOR_ADMIN_PASSWORD."
 fi
 
