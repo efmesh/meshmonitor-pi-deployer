@@ -20,6 +20,8 @@ services:
     restart: unless-stopped
     environment:
       MESHMONITOR_RADIO_CONNECTION_TYPE: "{{ meshmonitor_radio_connection_type }}"
+      # Allow the web UI to be reached from any LAN origin (Pi IP, hostname, etc.).
+      ALLOWED_ORIGINS: "*"
       # Container timezone so the sunrise announce cron fires Rothbury-local.
       TZ: "{{ meshmonitor_timezone }}"
       # Persisted across deploys (Ansible generates it once if absent).
