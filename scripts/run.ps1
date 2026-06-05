@@ -43,6 +43,10 @@ if ([string]::IsNullOrWhiteSpace($DefaultTargetPiIp)) {
     }
 }
 
+$DefaultPiUsername = if ($env:PI_USERNAME) { $env:PI_USERNAME } else { "pi" }
+$PiUsernameInput = Read-Host "Pi SSH username [$DefaultPiUsername]"
+$PiUsername = if ([string]::IsNullOrWhiteSpace($PiUsernameInput)) { $DefaultPiUsername } else { $PiUsernameInput }
+
 $DefaultTargetPiPassword = if ($env:TARGET_PI_PASSWORD) { $env:TARGET_PI_PASSWORD } else { "" }
 if ([string]::IsNullOrWhiteSpace($DefaultTargetPiPassword)) {
     $TargetPiPasswordSecure = Read-Host "Pi password" -AsSecureString
@@ -129,6 +133,8 @@ while ($true) {
         Write-Host "Admin password cannot be empty."
     } elseif ($MeshmonitorAdminPassword -eq "changeme") {
         Write-Host "Admin password must not be the default 'changeme'."
+    } elseif ($MeshmonitorAdminPassword.Length -lt 8) {
+        Write-Host "Admin password must be at least 8 characters (MeshMonitor requirement)."
     } else {
         break
     }
@@ -142,7 +148,7 @@ $EfMorningMessage = if ([string]::IsNullOrWhiteSpace($EfMorningInput)) { $EfMorn
 $ForceSeed = if ($env:FORCE_SEED) { $env:FORCE_SEED } else { "false" }
 
 $DeployerImageName = if ($env:DEPLOYER_IMAGE_NAME) { $env:DEPLOYER_IMAGE_NAME } else { "meshmonitor-deployer:latest" }
-$PiUsername = if ($env:PI_USERNAME) { $env:PI_USERNAME } else { "pi" }
+# $PiUsername is set from the interactive prompt above.
 $PiSshPort = if ($env:PI_SSH_PORT) { $env:PI_SSH_PORT } else { "22" }
 $MeshmonitorImage = if ($env:MESHMONITOR_IMAGE) { $env:MESHMONITOR_IMAGE } else { "ghcr.io/yeraze/meshmonitor:latest" }
 $MeshmonitorHttpPort = if ($env:MESHMONITOR_HTTP_PORT) { $env:MESHMONITOR_HTTP_PORT } else { "8080" }

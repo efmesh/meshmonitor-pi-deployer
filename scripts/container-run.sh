@@ -45,6 +45,14 @@ if [ "$MESHMONITOR_ADMIN_PASSWORD" = "changeme" ]; then
   exit 1
 fi
 
+# MeshMonitor enforces an 8-character minimum; reject early with a clear message
+# rather than failing deep in the seeding step (where a too-short password would
+# leave the instance on the default 'changeme').
+if [ "${#MESHMONITOR_ADMIN_PASSWORD}" -lt 8 ]; then
+  echo "MESHMONITOR_ADMIN_PASSWORD must be at least 8 characters (MeshMonitor requirement)"
+  exit 1
+fi
+
 # Default the sunrise message to the camp-substituted greeting when unset.
 if [ -z "$EF_MORNING_MESSAGE" ]; then
   EF_MORNING_MESSAGE="🌅 Good Morning from ${EF_CAMP}! ☀️🌲"
