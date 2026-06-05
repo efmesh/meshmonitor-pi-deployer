@@ -7,3 +7,82 @@ meshtastic_ble_bridge_image: "{{ lookup('env', 'MESHTASTIC_BLE_BRIDGE_IMAGE') | 
 meshtastic_ble_bridge_port: "{{ lookup('env', 'MESHTASTIC_BLE_BRIDGE_PORT') | default('4403', true) }}"
 meshmonitor_compose_dir: /opt/meshmonitor
 meshmonitor_compose_file: "{{ meshmonitor_compose_dir }}/docker-compose.yml"
+meshmonitor_data_dir: "{{ meshmonitor_compose_dir }}/data"
+meshmonitor_session_secret_file: "{{ meshmonitor_compose_dir }}/.session_secret"
+# MeshMonitor serves HTTP on container port 3001; nginx + the host port map to it.
+meshmonitor_container_port: 3001
+# Timezone for the container so the sunrise announce cron fires Rothbury-local.
+meshmonitor_timezone: "America/Detroit"
+
+# Electric Forest turnkey automation seeding.
+# Current seed version; bump when the seeded settings change so reruns re-seed.
+efmesh_seed_version: 1
+ef_camp: "{{ lookup('env', 'EF_CAMP') | default('', true) }}"
+ef_morning_message: "{{ lookup('env', 'EF_MORNING_MESSAGE') | default('', true) }}"
+meshmonitor_admin_password: "{{ lookup('env', 'MESHMONITOR_ADMIN_PASSWORD') | default('', true) }}"
+ef_force_seed: "{{ lookup('env', 'FORCE_SEED') | default('false', true) }}"
+meshmonitor_seed_marker_file: "{{ meshmonitor_compose_dir }}/.efmesh_seed_version"
+# Effective sunrise message: explicit override, else camp-substituted default.
+ef_morning_effective: "{{ ef_morning_message if ef_morning_message | length > 0 else '🌅 Good Morning from ' ~ ef_camp ~ '! ☀️🌲' }}"
+
+# Turnkey Electric Forest automation settings (flat string key-values, as the
+# MeshMonitor /api/settings endpoint stores them). ef_camp and the morning
+# message are substituted directly; the seeder template JSON-escapes the whole
+# dict via to_nice_json. The custom seed-version marker is NOT stored here
+# because MeshMonitor drops unrecognized setting keys — see the seeder.
+ef_seed_settings:
+  autoAckEnabled: "true"
+  autoAckChannels: "0,2"
+  autoAckDirectEnabled: "true"
+  autoAckDirectMessages: "true"
+  autoAckDirectReplyEnabled: "true"
+  autoAckDirectTapbackEnabled: "true"
+  autoAckMultihopEnabled: "true"
+  autoAckMultihopReplyEnabled: "true"
+  autoAckMultihopTapbackEnabled: "true"
+  autoAckReplyEnabled: "true"
+  autoAckTapbackEnabled: "true"
+  autoAckUseDM: "true"
+  autoAckSkipIncompleteNodes: "false"
+  autoAckIgnoredNodes: ""
+  autoAckRegex: "(?<!\\bHey(?:,)?\\s)(?<!\\w\\s)\\b(?:test|testing|ping|check)\\b(?!\\s\\w)"
+  autoAckTestMessages: "test\nTest message\nping\nPING\nHello world\nTESTING 123"
+  autoAckMessage: "🤖 Yo {LONG_NAME}! Got you in {NUMBER_HOPS} hops at {{ ef_camp }} at {TIME}! SNR: {SNR}dB RSSI: {RSSI}dBm. DM me \"ping #\" and I'll send you a ping test that # of times."
+  autoAckMessageDirect: "🤖 Copy {LONG_NAME}! Got you in a direct connection at {{ ef_camp }} at {TIME}! SNR: {SNR}dB RSSI: {RSSI}dBm. DM me \"ping #\" and I'll send you a ping test that # of times."
+  autoPingEnabled: "true"
+  autoPingIntervalSeconds: "30"
+  autoPingMaxPings: "20"
+  autoPingTimeoutSeconds: "60"
+  autoResponderEnabled: "true"
+  autoResponderSkipIncompleteNodes: "false"
+  autoResponderTriggers: "[{\"id\":\"efmesh-hey\",\"trigger\":\"hey, hello,hi\",\"responseType\":\"text\",\"response\":\"hey\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"},{\"id\":\"efmesh-ping\",\"trigger\":\"ping\",\"responseType\":\"text\",\"response\":\"pong\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"},{\"id\":\"efmesh-test\",\"trigger\":\"test\",\"responseType\":\"text\",\"response\":\"got your test\",\"multiline\":false,\"verifyResponse\":false,\"channel\":\"dm\"}]"
+  autoWelcomeEnabled: "true"
+  autoWelcomeMaxHops: "10"
+  autoWelcomeMessage: "Happy Forest {LONG_NAME}!"
+  autoWelcomeTarget: "dm"
+  autoWelcomeWaitForName: "true"
+  autoTimeSyncEnabled: "true"
+  autoTimeSyncIntervalMinutes: "15"
+  autoTimeSyncExpirationHours: "24"
+  autoTimeSyncNodeFilterEnabled: "false"
+  autoKeyManagementEnabled: "true"
+  autoKeyManagementAutoPurge: "true"
+  autoKeyManagementIntervalMinutes: "60"
+  autoKeyManagementMaxExchanges: "3"
+  autoAnnounceEnabled: "true"
+  autoAnnounceUseSchedule: "true"
+  autoAnnounceSchedule: "5 6 * * *"
+  autoAnnounceChannelIndex: "2"
+  autoAnnounceChannelIndexes: "[2]"
+  autoAnnounceMessage: "{{ ef_morning_effective }}"
+  autoAnnounceOnStart: "false"
+  defaultMapCenterLat: "43.754"
+  defaultMapCenterLon: "-86.341"
+  defaultMapCenterZoom: "14"
+  distanceUnit: "mi"
+  temperatureUnit: "F"
+  timeFormat: "12"
+  dateFormat: "MM/DD/YYYY"
+  messageRetentionDays: "30"
+  maxNodeAgeHours: "168"
+  packet_log_enabled: "0"
