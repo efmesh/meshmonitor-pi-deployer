@@ -14,9 +14,17 @@ meshmonitor_container_port: 3001
 # Timezone for the container so the sunrise announce cron fires Rothbury-local.
 meshmonitor_timezone: "America/Detroit"
 
+# The seeder talks to MeshMonitor on loopback on the Pi. In configure-existing
+# mode the port is supplied via MESHMONITOR_HTTP_PORT (prompted by the deployer);
+# the SSH connection to the Pi is handled separately by the inventory.
+meshmonitor_seed_url: "http://127.0.0.1:{{ meshmonitor_http_port }}"
+# True when running in configure-existing mode (set via env by the deployer);
+# enables the fast API reachability pre-check below.
+meshmonitor_configure_existing: "{{ lookup('env', 'CONFIGURE_EXISTING') | default('false', true) }}"
+
 # Electric Forest turnkey automation seeding.
 # Current seed version; bump when the seeded settings change so reruns re-seed.
-efmesh_seed_version: 1
+efmesh_seed_version: 2
 ef_camp: "{{ lookup('env', 'EF_CAMP') | default('', true) }}"
 ef_morning_message: "{{ lookup('env', 'EF_MORNING_MESSAGE') | default('', true) }}"
 meshmonitor_admin_password: "{{ lookup('env', 'MESHMONITOR_ADMIN_PASSWORD') | default('', true) }}"

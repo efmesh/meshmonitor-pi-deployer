@@ -224,6 +224,55 @@ again picks up where it needs to.
 
 ---
 
+## Re-configuring an existing MeshMonitor (without redeploying)
+
+Once MeshMonitor is up, you don't have to run the whole deployment again just to
+change the Electric Forest automations — the camp name, the sunrise message, or
+any of the seeded auto-ack / auto-responder settings. There's a **configure
+mode** that skips all the provisioning (Docker, nginx, the container) and only
+re-seeds the automation settings against an already-running instance.
+
+On **Mac/Linux**:
+
+```bash
+./scripts/run.sh --configure-existing
+```
+
+On **Windows (PowerShell)**:
+
+```powershell
+./scripts/run.ps1 -ConfigureExisting
+```
+
+In this mode the script:
+
+- Asks for the **Pi IP** and SSH credentials as usual (it still connects to the
+  Pi over SSH, defaulting to `TARGET_PI_IP` from your `.env`).
+- Asks for the **MeshMonitor port** on the Pi (defaults to `8080`, MeshMonitor's
+  published host port). This is the only extra thing configure mode needs — the
+  seeder reaches MeshMonitor at `http://127.0.0.1:<port>` on the Pi.
+- **Skips the radio questions** (Wi-Fi/Bluetooth, radio IP/MAC) — those only
+  matter when first deploying the container.
+- Still asks for the **camp** and **admin password**, and re-seeds the
+  automations.
+
+Because the seeder is idempotent, a configure run normally no-ops if the
+instance is already at the current seed version. To force the settings to be
+re-applied (for example after you've hand-edited them in the UI and want to
+reset to the turnkey defaults), set `FORCE_SEED=true` in your `.env` before
+running.
+
+> **Targeting a MeshMonitor this deployer didn't install:** configure mode still
+> connects to the host over **SSH** (using `TARGET_PI_PASSWORD` / your Pi
+> credentials) and talks to MeshMonitor's API at **`http://127.0.0.1:<port>`** on
+> that host, where `<port>` is the MeshMonitor port you enter at the prompt. It
+> works regardless of how the container was started, as long as MeshMonitor's
+> HTTP API is reachable on loopback at that port. Before seeding, configure mode
+> runs a quick reachability check and **fails fast with a clear message** if it
+> can't reach the API (instead of hanging) — re-run with the correct port if so.
+
+---
+
 ## Deploying off-grid at camp (no router, battery + solar)
 
 Most people run these Pis **off-grid** — at a campsite, on a LiFePO4 power

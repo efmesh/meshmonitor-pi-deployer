@@ -9,6 +9,7 @@
       raw: |
         test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3 python3-apt)
       changed_when: false
+      tags: [always]
 
     - name: Gather facts after Python bootstrap
       ansible.builtin.setup:
@@ -60,6 +61,7 @@
           EF_CAMP and MESHMONITOR_ADMIN_PASSWORD are required to seed Electric
           Forest automations. The admin password must not be 'changeme' and must
           be at least 8 characters (MeshMonitor's minimum).
+      tags: [configure]
 
   tasks:
     - name: Install required system packages (might take a few minutes)
@@ -125,6 +127,7 @@
         path: "{{ meshmonitor_compose_dir }}"
         state: directory
         mode: "0755"
+      tags: [configure]
 
     - name: Ensure meshmonitor data directory exists
       ansible.builtin.file:
@@ -247,11 +250,38 @@
 
     # python3 for the seeder is guaranteed by the "Ensure Python is installed
     # for Ansible modules" pre_task.
+    - name: Probe MeshMonitor API reachability (configure-existing mode)
+      ansible.builtin.uri:
+        url: "{{ meshmonitor_seed_url }}/api/csrf-token"
+        method: GET
+        timeout: 5
+        status_code: 200
+      register: meshmonitor_api_probe
+      failed_when: false
+      changed_when: false
+      when: meshmonitor_configure_existing | bool
+      tags: [configure]
+
+    - name: Fail early when MeshMonitor API is unreachable (configure-existing mode)
+      ansible.builtin.fail:
+        msg: >-
+          Could not reach MeshMonitor's API at {{ meshmonitor_seed_url }}
+          (HTTP {{ meshmonitor_api_probe.status | default('no response') }}).
+          In configure-existing mode the instance must already be running and
+          reachable on the Pi at this port. If MeshMonitor publishes a different
+          port, re-run and enter the correct MeshMonitor port (or set
+          MESHMONITOR_HTTP_PORT in your .env).
+      when:
+        - meshmonitor_configure_existing | bool
+        - meshmonitor_api_probe.status | default(0) != 200
+      tags: [configure]
+
     - name: Template Electric Forest automation seeder
       ansible.builtin.template:
         src: templates/seed-meshmonitor-settings.sh.j2
         dest: "{{ meshmonitor_compose_dir }}/seed-settings.sh"
         mode: "0700"
+      tags: [configure]
 
     - name: Seed Electric Forest turnkey automations
       ansible.builtin.command:
@@ -263,10 +293,12 @@
       register: ef_seed_result
       changed_when: "'Seed complete' in ef_seed_result.stdout"
       failed_when: ef_seed_result.rc != 0
+      tags: [configure]
 
     - name: Show Electric Forest seeding result
       ansible.builtin.debug:
         msg: "{{ ef_seed_result.stdout_lines }}"
+      tags: [configure]
 
   post_tasks:
     - name: Deployment summary
@@ -276,6 +308,7 @@
           - "MeshMonitor deployed successfully."
           - "------------------------------------------------------------"
           - "Open it in a browser:  http://{{ ansible_host | default(inventory_hostname) }}/"
+          - "Direct (MeshMonitor port): http://{{ ansible_host | default(inventory_hostname) }}:{{ meshmonitor_http_port }}/"
           - "Log in as:             admin"
           - "Password:              the MESHMONITOR_ADMIN_PASSWORD you set"
           - "                       (the default 'changeme' is now disabled)"
@@ -290,3 +323,4 @@
           - "Electric Forest automations are seeded and editable in the UI under"
           - "Settings -> Automation."
           - "============================================================"
+      tags: [configure]
