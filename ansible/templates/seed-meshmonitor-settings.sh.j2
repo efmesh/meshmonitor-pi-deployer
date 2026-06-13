@@ -12,7 +12,7 @@
 # via {{ meshmonitor_seed_marker_file }} rather than as a setting.
 set -euo pipefail
 
-BASE_URL="http://127.0.0.1:{{ meshmonitor_http_port }}"
+BASE_URL="{{ meshmonitor_seed_url }}"
 # The admin password is passed via the environment by the Ansible task rather
 # than templated into this file, so it never lands on disk and shell
 # metacharacters ($, backticks, quotes) in it are never interpreted.

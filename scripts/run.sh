@@ -9,6 +9,29 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   source "$PROJECT_DIR/.env"
 fi
 
+# Configure-existing mode: skip the full provisioning and only (re)seed the
+# Electric Forest automations on an already-deployed MeshMonitor instance.
+CONFIGURE_EXISTING=false
+for arg in "$@"; do
+  case "$arg" in
+    --configure-existing | --configure)
+      CONFIGURE_EXISTING=true
+      ;;
+    -h | --help)
+      echo "Usage: $(basename "$0") [--configure-existing]"
+      echo "  --configure-existing  Re-seed an already-running MeshMonitor instance"
+      echo "                        (skips Docker/nginx provisioning). You connect"
+      echo "                        to the Pi as usual and provide the MeshMonitor"
+      echo "                        port to reach on it."
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
+
 DEFAULT_TARGET_PI_IP="${TARGET_PI_IP:-}"
 if [[ -n "$DEFAULT_TARGET_PI_IP" ]]; then
   read -rp "Pi IP address [$DEFAULT_TARGET_PI_IP]: " TARGET_PI_IP_INPUT
@@ -30,29 +53,46 @@ else
 fi
 echo
 DEFAULT_RADIO_CONNECTION_TYPE="${RADIO_CONNECTION_TYPE:-wifi}"
-read -rp "MeshMonitor radio connection (wifi/bluetooth) [$DEFAULT_RADIO_CONNECTION_TYPE]: " RADIO_CONNECTION_TYPE
-RADIO_CONNECTION_TYPE="${RADIO_CONNECTION_TYPE:-$DEFAULT_RADIO_CONNECTION_TYPE}"
-RADIO_CONNECTION_TYPE="${RADIO_CONNECTION_TYPE,,}"
-
+RADIO_CONNECTION_TYPE="$DEFAULT_RADIO_CONNECTION_TYPE"
 RADIO_IP_VALUE="${RADIO_IP:-}"
-if [[ "$RADIO_CONNECTION_TYPE" == "wifi" ]]; then
-  if [[ -n "$RADIO_IP_VALUE" ]]; then
-    read -rp "LoRa radio IP address [$RADIO_IP_VALUE]: " RADIO_IP_INPUT
-    RADIO_IP_VALUE="${RADIO_IP_INPUT:-$RADIO_IP_VALUE}"
-  else
-    read -rp "LoRa radio IP address: " RADIO_IP_INPUT
-    RADIO_IP_VALUE="$RADIO_IP_INPUT"
-  fi
-fi
-
 RADIO_MAC_VALUE="${RADIO_MAC:-}"
-if [[ "$RADIO_CONNECTION_TYPE" == "bluetooth" ]]; then
-  if [[ -n "$RADIO_MAC_VALUE" ]]; then
-    read -rp "LoRa radio MAC (AA:BB:CC:DD:EE:FF) [$RADIO_MAC_VALUE]: " RADIO_MAC_INPUT
-    RADIO_MAC_VALUE="${RADIO_MAC_INPUT:-$RADIO_MAC_VALUE}"
-  else
-    read -rp "LoRa radio MAC (AA:BB:CC:DD:EE:FF): " RADIO_MAC_INPUT
-    RADIO_MAC_VALUE="$RADIO_MAC_INPUT"
+MESHMONITOR_HTTP_PORT_VALUE="${MESHMONITOR_HTTP_PORT:-8080}"
+if [[ "$CONFIGURE_EXISTING" == "true" ]]; then
+  # Configure mode connects to the Pi over SSH as usual and reaches MeshMonitor
+  # on 127.0.0.1:<port> on the Pi, so the published port is the one variable we
+  # must know. Require it explicitly.
+  while true; do
+    read -rp "MeshMonitor port on the Pi [$MESHMONITOR_HTTP_PORT_VALUE]: " MESHMONITOR_HTTP_PORT_INPUT
+    MESHMONITOR_HTTP_PORT_VALUE="${MESHMONITOR_HTTP_PORT_INPUT:-$MESHMONITOR_HTTP_PORT_VALUE}"
+    if [[ "$MESHMONITOR_HTTP_PORT_VALUE" =~ ^[0-9]+$ ]] && (( MESHMONITOR_HTTP_PORT_VALUE >= 1 && MESHMONITOR_HTTP_PORT_VALUE <= 65535 )); then
+      break
+    fi
+    echo "Enter a valid port number (1-65535)."
+  done
+fi
+if [[ "$CONFIGURE_EXISTING" != "true" ]]; then
+  read -rp "MeshMonitor radio connection (wifi/bluetooth) [$DEFAULT_RADIO_CONNECTION_TYPE]: " RADIO_CONNECTION_TYPE
+  RADIO_CONNECTION_TYPE="${RADIO_CONNECTION_TYPE:-$DEFAULT_RADIO_CONNECTION_TYPE}"
+  RADIO_CONNECTION_TYPE="${RADIO_CONNECTION_TYPE,,}"
+
+  if [[ "$RADIO_CONNECTION_TYPE" == "wifi" ]]; then
+    if [[ -n "$RADIO_IP_VALUE" ]]; then
+      read -rp "LoRa radio IP address [$RADIO_IP_VALUE]: " RADIO_IP_INPUT
+      RADIO_IP_VALUE="${RADIO_IP_INPUT:-$RADIO_IP_VALUE}"
+    else
+      read -rp "LoRa radio IP address: " RADIO_IP_INPUT
+      RADIO_IP_VALUE="$RADIO_IP_INPUT"
+    fi
+  fi
+
+  if [[ "$RADIO_CONNECTION_TYPE" == "bluetooth" ]]; then
+    if [[ -n "$RADIO_MAC_VALUE" ]]; then
+      read -rp "LoRa radio MAC (AA:BB:CC:DD:EE:FF) [$RADIO_MAC_VALUE]: " RADIO_MAC_INPUT
+      RADIO_MAC_VALUE="${RADIO_MAC_INPUT:-$RADIO_MAC_VALUE}"
+    else
+      read -rp "LoRa radio MAC (AA:BB:CC:DD:EE:FF): " RADIO_MAC_INPUT
+      RADIO_MAC_VALUE="$RADIO_MAC_INPUT"
+    fi
   fi
 fi
 
@@ -126,6 +166,7 @@ docker build -t "$DEPLOYER_IMAGE_NAME" "$PROJECT_DIR"
 docker run --rm \
   -e TARGET_PI_IP="$TARGET_PI_IP" \
   -e TARGET_PI_PASSWORD="$TARGET_PI_PASSWORD" \
+  -e CONFIGURE_EXISTING="$CONFIGURE_EXISTING" \
   -e RADIO_CONNECTION_TYPE="$RADIO_CONNECTION_TYPE" \
   -e RADIO_IP="$RADIO_IP_VALUE" \
   -e RADIO_MAC="$RADIO_MAC_VALUE" \
@@ -136,7 +177,7 @@ docker run --rm \
   -e MESHMONITOR_ADMIN_PASSWORD="$MESHMONITOR_ADMIN_PASSWORD" \
   -e FORCE_SEED="${FORCE_SEED:-false}" \
   -e MESHMONITOR_IMAGE="${MESHMONITOR_IMAGE:-ghcr.io/yeraze/meshmonitor:latest}" \
-  -e MESHMONITOR_HTTP_PORT="${MESHMONITOR_HTTP_PORT:-8080}" \
+  -e MESHMONITOR_HTTP_PORT="$MESHMONITOR_HTTP_PORT_VALUE" \
   -e MESHTASTIC_BLE_BRIDGE_IMAGE="${MESHTASTIC_BLE_BRIDGE_IMAGE:-ghcr.io/yeraze/meshtastic-ble-bridge:latest}" \
   -e MESHTASTIC_BLE_BRIDGE_PORT="${MESHTASTIC_BLE_BRIDGE_PORT:-4403}" \
   "$DEPLOYER_IMAGE_NAME"

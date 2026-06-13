@@ -1,4 +1,9 @@
-param()
+param(
+    # Configure-existing mode: skip the full provisioning and only (re)seed the
+    # Electric Forest automations on an already-deployed MeshMonitor instance.
+    [Alias("Configure")]
+    [switch]$ConfigureExisting
+)
 
 function Convert-SecureStringToPlainText {
     param([Parameter(Mandatory = $true)][System.Security.SecureString]$SecureString)
@@ -61,25 +66,45 @@ if ([string]::IsNullOrWhiteSpace($DefaultTargetPiPassword)) {
     }
 }
 $DefaultRadioConnectionType = if ($env:RADIO_CONNECTION_TYPE) { $env:RADIO_CONNECTION_TYPE } else { "wifi" }
-$RadioConnectionType = Read-Host "MeshMonitor radio connection (wifi/bluetooth) [$DefaultRadioConnectionType]"
-if ([string]::IsNullOrWhiteSpace($RadioConnectionType)) {
-    $RadioConnectionType = $DefaultRadioConnectionType
-}
-$RadioConnectionType = $RadioConnectionType.ToLower()
-
+$RadioConnectionType = $DefaultRadioConnectionType
 $RadioIp = if ($env:RADIO_IP) { $env:RADIO_IP } else { "" }
-if ($RadioConnectionType -eq "wifi") {
-    $RadioIpInput = Read-Host "LoRa radio IP address"
-    if (-not [string]::IsNullOrWhiteSpace($RadioIpInput)) {
-        $RadioIp = $RadioIpInput
+$RadioMac = if ($env:RADIO_MAC) { $env:RADIO_MAC } else { "" }
+$MeshmonitorHttpPort = if ($env:MESHMONITOR_HTTP_PORT) { $env:MESHMONITOR_HTTP_PORT } else { "8080" }
+if ($ConfigureExisting) {
+    # Configure mode connects to the Pi over SSH as usual and reaches MeshMonitor
+    # on 127.0.0.1:<port> on the Pi, so the published port is the one variable we
+    # must know. Require it explicitly.
+    while ($true) {
+        $MeshmonitorHttpPortInput = Read-Host "MeshMonitor port on the Pi [$MeshmonitorHttpPort]"
+        if (-not [string]::IsNullOrWhiteSpace($MeshmonitorHttpPortInput)) {
+            $MeshmonitorHttpPort = $MeshmonitorHttpPortInput
+        }
+        $parsedPort = 0
+        if ([int]::TryParse($MeshmonitorHttpPort, [ref]$parsedPort) -and $parsedPort -ge 1 -and $parsedPort -le 65535) {
+            break
+        }
+        Write-Host "Enter a valid port number (1-65535)."
     }
 }
+if (-not $ConfigureExisting) {
+    $RadioConnectionType = Read-Host "MeshMonitor radio connection (wifi/bluetooth) [$DefaultRadioConnectionType]"
+    if ([string]::IsNullOrWhiteSpace($RadioConnectionType)) {
+        $RadioConnectionType = $DefaultRadioConnectionType
+    }
+    $RadioConnectionType = $RadioConnectionType.ToLower()
 
-$RadioMac = if ($env:RADIO_MAC) { $env:RADIO_MAC } else { "" }
-if ($RadioConnectionType -eq "bluetooth") {
-    $RadioMacInput = Read-Host "LoRa radio MAC (AA:BB:CC:DD:EE:FF)"
-    if (-not [string]::IsNullOrWhiteSpace($RadioMacInput)) {
-        $RadioMac = $RadioMacInput
+    if ($RadioConnectionType -eq "wifi") {
+        $RadioIpInput = Read-Host "LoRa radio IP address"
+        if (-not [string]::IsNullOrWhiteSpace($RadioIpInput)) {
+            $RadioIp = $RadioIpInput
+        }
+    }
+
+    if ($RadioConnectionType -eq "bluetooth") {
+        $RadioMacInput = Read-Host "LoRa radio MAC (AA:BB:CC:DD:EE:FF)"
+        if (-not [string]::IsNullOrWhiteSpace($RadioMacInput)) {
+            $RadioMac = $RadioMacInput
+        }
     }
 }
 
@@ -151,7 +176,6 @@ $DeployerImageName = if ($env:DEPLOYER_IMAGE_NAME) { $env:DEPLOYER_IMAGE_NAME } 
 # $PiUsername is set from the interactive prompt above.
 $PiSshPort = if ($env:PI_SSH_PORT) { $env:PI_SSH_PORT } else { "22" }
 $MeshmonitorImage = if ($env:MESHMONITOR_IMAGE) { $env:MESHMONITOR_IMAGE } else { "ghcr.io/yeraze/meshmonitor:latest" }
-$MeshmonitorHttpPort = if ($env:MESHMONITOR_HTTP_PORT) { $env:MESHMONITOR_HTTP_PORT } else { "8080" }
 $MeshtasticBleBridgeImage = if ($env:MESHTASTIC_BLE_BRIDGE_IMAGE) { $env:MESHTASTIC_BLE_BRIDGE_IMAGE } else { "ghcr.io/yeraze/meshtastic-ble-bridge:latest" }
 $MeshtasticBleBridgePort = if ($env:MESHTASTIC_BLE_BRIDGE_PORT) { $env:MESHTASTIC_BLE_BRIDGE_PORT } else { "4403" }
 
@@ -163,6 +187,7 @@ if ($LASTEXITCODE -ne 0) {
 docker run --rm `
     -e TARGET_PI_IP=$TargetPiIp `
     -e TARGET_PI_PASSWORD=$TargetPiPassword `
+    -e CONFIGURE_EXISTING=$($ConfigureExisting.ToString().ToLower()) `
     -e RADIO_CONNECTION_TYPE=$RadioConnectionType `
     -e RADIO_IP=$RadioIp `
     -e RADIO_MAC=$RadioMac `

@@ -14,6 +14,15 @@ EF_MORNING_MESSAGE="${EF_MORNING_MESSAGE:-}"
 MESHMONITOR_ADMIN_PASSWORD="${MESHMONITOR_ADMIN_PASSWORD:-}"
 FORCE_SEED="${FORCE_SEED:-false}"
 
+# Configure-existing mode: skip the full provisioning (Docker, nginx, container
+# deploy) and only (re)seed the Electric Forest automations on an already
+# running MeshMonitor instance via the playbook's `configure` tag. The SSH
+# connection still targets the Pi (TARGET_PI_IP / PI_SSH_PORT) as usual; the
+# only extra thing we need is the MeshMonitor port to reach on 127.0.0.1.
+CONFIGURE_EXISTING="${CONFIGURE_EXISTING:-false}"
+CONFIGURE_EXISTING="$(printf '%s' "$CONFIGURE_EXISTING" | tr '[:upper:]' '[:lower:]')"
+MESHMONITOR_HTTP_PORT="${MESHMONITOR_HTTP_PORT:-8080}"
+
 if [ -z "$PI_IP" ]; then
   echo "TARGET_PI_IP is required"
   exit 1
@@ -24,9 +33,20 @@ if [ -z "$PI_PASSWORD" ]; then
   exit 1
 fi
 
-if [ "$RADIO_CONNECTION_TYPE" != "wifi" ] && [ "$RADIO_CONNECTION_TYPE" != "bluetooth" ]; then
-  echo "RADIO_CONNECTION_TYPE must be either 'wifi' or 'bluetooth'"
-  exit 1
+if [ "$CONFIGURE_EXISTING" = "true" ]; then
+  case "$MESHMONITOR_HTTP_PORT" in
+    ''|*[!0-9]*)
+      echo "MESHMONITOR_HTTP_PORT must be a port number when configuring an existing instance"
+      exit 1
+      ;;
+  esac
+fi
+
+if [ "$CONFIGURE_EXISTING" != "true" ]; then
+  if [ "$RADIO_CONNECTION_TYPE" != "wifi" ] && [ "$RADIO_CONNECTION_TYPE" != "bluetooth" ]; then
+    echo "RADIO_CONNECTION_TYPE must be either 'wifi' or 'bluetooth'"
+    exit 1
+  fi
 fi
 
 # Electric Forest turnkey automation seeding inputs.
@@ -58,7 +78,7 @@ if [ -z "$EF_MORNING_MESSAGE" ]; then
   EF_MORNING_MESSAGE="🌅 Good Morning from ${EF_CAMP}! ☀️🌲"
 fi
 
-if [ "$RADIO_CONNECTION_TYPE" = "wifi" ]; then
+if [ "$RADIO_CONNECTION_TYPE" = "wifi" ] && [ "$CONFIGURE_EXISTING" != "true" ]; then
   if [ -z "$RADIO_IP" ]; then
     echo "RADIO_IP is required when RADIO_CONNECTION_TYPE=wifi"
     exit 1
@@ -70,7 +90,7 @@ if [ "$RADIO_CONNECTION_TYPE" = "wifi" ]; then
   fi
 fi
 
-if [ "$RADIO_CONNECTION_TYPE" = "bluetooth" ]; then
+if [ "$RADIO_CONNECTION_TYPE" = "bluetooth" ] && [ "$CONFIGURE_EXISTING" != "true" ]; then
   if [ -z "$RADIO_MAC" ]; then
     echo "RADIO_MAC is required when RADIO_CONNECTION_TYPE=bluetooth"
     exit 1
@@ -90,7 +110,11 @@ cat > /workspace/ansible/inventory.ini <<EOF
 pi_target ansible_host=$PI_IP ansible_user=$PI_USERNAME ansible_port=$PI_SSH_PORT ansible_connection=ssh ansible_ssh_pass='$PI_PASSWORD_INI' ansible_become_pass='$PI_PASSWORD_INI'
 EOF
 
-echo "Running deployment for $PI_IP with MeshMonitor radio mode: $RADIO_CONNECTION_TYPE"
+if [ "$CONFIGURE_EXISTING" = "true" ]; then
+  echo "Configuring existing MeshMonitor instance on $PI_IP at 127.0.0.1:$MESHMONITOR_HTTP_PORT"
+else
+  echo "Running deployment for $PI_IP with MeshMonitor radio mode: $RADIO_CONNECTION_TYPE"
+fi
 # Pass EF seeding inputs as extra-vars via a JSON file so that arbitrary
 # characters (emoji, quotes, spaces) in the camp and morning message survive
 # without shell-quoting issues.
@@ -109,7 +133,13 @@ with open(sys.argv[1], "w") as fh:
 PYEOF
 
 rc=0
+TAGS_ARG=""
+if [ "$CONFIGURE_EXISTING" = "true" ]; then
+  # Only run the seeding/configuration tasks against the existing instance.
+  TAGS_ARG="--tags configure"
+fi
 ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg ansible-playbook \
+  $TAGS_ARG \
   -e "meshmonitor_radio_connection_type=$RADIO_CONNECTION_TYPE" \
   -e "meshmonitor_radio_ip=$RADIO_IP" \
   -e "meshmonitor_radio_mac=$RADIO_MAC" \
