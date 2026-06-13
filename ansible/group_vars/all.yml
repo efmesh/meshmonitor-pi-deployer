@@ -53,7 +53,7 @@ ef_seed_settings:
   autoAckUseDM: "true"
   autoAckSkipIncompleteNodes: "false"
   autoAckIgnoredNodes: ""
-  autoAckRegex: '(?<!\bHey(?:,)?\s)(?<!\w\s)\b(?:test|testing|ping|check)\b(?!\s\w)'
+  autoAckRegex: '(?<!Hey(?:,)?\s)(?<!\w\s)\b(?:test|testing|ping|check)\b(?!\s\w)'
   autoAckTestMessages: "test\nTest message\nping\nPING\nHello world\nTESTING 123"
   autoAckMessage: "🤖 Yo {LONG_NAME}! Got you in {NUMBER_HOPS} hops at {{ ef_camp }} at {TIME}! SNR: {SNR}dB RSSI: {RSSI}dBm. DM me \"ping #\" and I'll send you a ping test that # of times."
   autoAckMessageDirect: "🤖 Copy {LONG_NAME}! Got you in a direct connection at {{ ef_camp }} at {TIME}! SNR: {SNR}dB RSSI: {RSSI}dBm. DM me \"ping #\" and I'll send you a ping test that # of times."
